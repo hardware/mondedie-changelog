@@ -34,6 +34,12 @@ Pensez aussi à mettre à jour votre système avant de commencer :
 
 [code]apt-get update && apt-get dist-upgrade[/code]
 
+[h]Changelog :[/h]
+
+Un changelog est disponible sur Github pour que vous puissiez suivre les évolutions du tutoriel facilement.
+
+[center]>> [b][url=https://github.com/hardware/mondedie-changelog/commits/master/mailserver.txt]CHANGELOG[/url][/b] <<[/center]
+
 [h]Script d'auto-installation :[/h]
 
 Un script d'installation automatique est disponible dans ce topic : [url]http://mondedie.fr/viewtopic.php?pid=11746[/url]
