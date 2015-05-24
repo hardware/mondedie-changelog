@@ -1,0 +1,1552 @@
+[center][b]Installation sécurisée d'un serveur de mail avec Postfix, Dovecot et Rainloop[/b][/center]
+
+[center][img]http://i.imgur.com/yukdywZ.png[/img][/center]
+
+Bonjour,
+
+Voici un petit tutoriel pour vous aider à installer un serveur mail sous GNU/Linux. Ce tutoriel a été réalisé sous Debian 7 "wheezy" mais la plupart des commandes peuvent être adaptées pour être utilisées sur d'autres distributions. Cette aide n'est volontairement pas exhaustive car le sujet traité peut-être assez complexe quand on le traite de manière plus approfondi et ainsi garder un tuto plus accessible (et beaucoup moins long...). Bien sur, ce tutoriel s'adresse à des personnes qui ont déjà une bonne expérience en administration système sous Linux car il est très important de comprendre ce que l'on fait afin de mieux réagir en cas de disfonctionnement (surtout dans le cas où l'on se sert tous les jours de son serveur pour envoyer/reçevoir des mails).
+
+A la fin de ce tutoriel, vous devriez normalement être capable d'envoyer et de reçevoir des emails à partir du client web Rainloop ou avec n'importe quel client mail desktop (Thunderbird, outlook, Claws Mail, Evolution...etc) ainsi qu'avec un nombre quasi illimité d'adresses email virtuelles.
+
+[center][b]Le'ts Go ![/b][/center]
+
+[center]Ce tutoriel est compatible avec [b]Debian 7 “wheezy”[/b] et [b]Debian 8 “jessie”[/b][/center]
+
+[h]Pré-requis : [/h]
+[quote][list=*]
+[*]Un nom de domaine (avec un accès aux DNS et fichiers de zone)[/*]
+[*]Nginx[/*]
+[*]PHP[/*]
+[*]OpenSSL[/*]
+[*]MySQL[/*]
+[/list][/quote]
+
+
+[quote]
+[b][color=#ff0303]ATTENTION[/color][/b] : [b]Pour suivre ce tuto, il est impératif que vous sachiez comment configurer votre nom de domaine. Connaitre le fonctionnement des DNS ([url=fr.wikipedia.org/wiki/Domain_Name_System]Domain Name System[/url]) serait un gros plus. Si ce n'est pas le cas, vous ne pourrez pas suivre ce tutoriel correctement. Allez voir le cours suivant pour apprendre à configurer votre nom de domaine : [url]http://fr.openclassrooms.com/informatique/cours/gerer-son-nom-de-domaine[/url][/b]
+[/quote]
+
+[quote]
+[b][color=#ff0303]ATTENTION[/color] : Il vous faut un serveur LEMP (Linux, Nginx, MySQL, PHP) fonctionnel avant de continuer. Si ce n'est pas le cas, allez voir [url=https://www.digitalocean.com/community/search?primary_filter=tutorials&query=lemp]un de ces articles[/url]. Vous pouvez choisir un serveur web différent de celui utilisé dans ce tutoriel (Nginx) mais ça sera à vous de le configurer correctement.[/b]
+[/quote]
+
+Pensez aussi à mettre à jour votre système avant de commencer :
+
+[code]apt-get update && apt-get dist-upgrade[/code]
+
+[h]Script d'auto-installation :[/h]
+
+Un script d'installation automatique est disponible dans ce topic : [url]http://mondedie.fr/viewtopic.php?pid=11746[/url]
+
+[center][video]youtube.com/watch?v=4Pf25McpDsw[/video][/center]
+
+[h]Schéma :[/h]
+
+Voici un schéma représentant l'organisation du serveur mail :
+
+[img]http://i.imgur.com/jxYSjFy.png[/img]
+
+Un petit conseil : à chaque fois que vous vous apprêtez à installer un ensemble de logiciels sur votre serveur, essayez de dessiner le schéma correspondant, d'une part ça va vous faciliter la tâche pour imbriquer les différentes couches logicielles et d'autre part vous aurez une vision plus concrète de ce que vous allez faire.
+
+[h]Configuration du nom d'hôte, du FQDN et du champ MX :[/h]
+
+Le nom d'hôte, le FQDN (Fully Qualified Domain Name), et l'enregistrement MX de votre serveur doivent être configurés côté serveur mais aussi au niveau des DNS de votre nom de domaine, si c'est déjà le cas, vous pouvez directement aller à la partie 1, sinon suivez les instructions ci-dessous :
+
+Le nom d'hôte (hostname) est un surnom que vous donnez à un équipement réseau (comme un serveur, un poste de travail, une imprimante...etc) permettant de l'identifier de manière unique au sein d'un réseau [b]local[/b] et d'y accéder sans connaître par coeur l'adresse ip associée.
+Le FQDN permet de rendre un équipement réseau accessible partout sur internet et de l'identifier aussi de manière unique.
+
+Dans la suite de ce tutoriel, nous allons utiliser les caractéristiques suivantes (à adapter selon votre configuration) : 
+[quote]
+- Nom de domaine principal : [b]domain.tld[/b]
+- Nom d'hôte : [b]hostname[/b]
+- FQDN : [b]hostname.domain.tld[/b]
+- MX : [b]mail.domain.tld[/b]
+[/quote]
+
+Pour modifier le nom d'hôte, exécutez la commande suivante (n'oubliez pas de remplacer "hostname" par le nom d'hôte de votre serveur) :
+
+[code]
+echo "hostname" > /etc/hostname
+[/code]
+
+Pour modifier le FQDN, il faut editer le fichier /etc/hosts :
+
+[code]
+# vim /etc/hosts
+
+127.0.0.1 localhost.localdomain localhost
+IP DU SERVEUR hostname.domain.tld hostname
+[/code]
+
+Redémarrez le serveur pour prendre en compte le changement de nom d'hôte. Ensuite il faut associer le FQDN avec l'adresse IP de votre serveur. Pour cela, vous devez mettre à jour le fichier de zone de votre domaine depuis le site de votre registrar ou sinon directement avec BIND si votre serveur fait office de serveur DNS. 
+
+Le plus important dans cette partie, c'est de faire pointer le [b]FQDN[/b] ET le [b]MX[/b] vers l'adresse IP de votre serveur. L'enregistrement MX permet de déterminer vers quel serveur un email doit être acheminé, si quelqu'un vous envoie un message depuis Gmail par exemple, les serveurs de google vont automatiquement intérroger cette entrée pour savoir où transmettre le message. Donc si cette entrée est pas ou mal définie, vous ne reçevrez jamais d'emails.
+
+A la fin du tutoriel, les enregistrements DNS de votre domaine devront ressembler à ceci :
+
+[code]
+HOSTNAME            CLASS             RECORD TYPE          VALUE
+------------------------------------------------------------------------------------------------
+@                   IN                A                    ipv4 du serveur
+hostname            IN                A                    ipv4 du serveur
+mail                IN                A                    ipv4 du serveur
+
+postfixadmin        IN                CNAME                hostname  
+rainloop            IN                CNAME                hostname
+
+@                   IN                MX          10       mail.domain.tld.
+
+; Les enregistrements suivants sont facultatifs :
+
+smtp                IN                CNAME                hostname
+imap                IN                CNAME                hostname 
+
+; Les enregistrements suivants sont facultatifs mais permettent de rendre plus crédible
+; son serveur mail sur le réseau (aux yeux des autres serveurs de mail comme Gmail, 
+; Outlook & co...).
+
+@                   IN                TXT                  "v=spf1 a mx ip4:IPv4 DU SERVEUR ~all"
+mail._domainkey     IN                TXT                  "k=rsa; p=CLE PUBLIQUE DKIM"
+_dmarc              IN                TXT                  "v=DMARC1; p=reject; rua=mailto:postmaster@domain.tld; ruf=mailto:admin@domain.tld; fo=0; adkim=s; aspf=s; pct=100; rf=afrf; sp=reject"
+_domainkey          IN                TXT                  "o=-; r=postmaster@domain.tld"
+[/code]
+
+Rechargez la configuration de BIND en redémarrant le service (ne pas oublier de modifier la valeur du serial pour indiquer que le fichier de zone a été mis à jour !!) :
+[code]service bind9 restart[/code]
+
+Attendez quelques minutes que les DNS se propagent, vous pouvez suivre l'avancement avec ce site par exemple : [url=https://www.whatsmydns.net/]https://www.whatsmydns.net/[/url] :
+
+[img]http://i.imgur.com/ZLBG8eU.png[/img]
+
+Et pour finir modifiez le [b]reverse[/b] depuis l'interface de votre hébergeur, par exemple chez Kimsufi :
+
+[img]http://i.imgur.com/rK9157X.png[/img]
+
+[h]1 - Installation de postfix[/h]
+
+[quote]Liens utiles :
+[url=http://fr.wikipedia.org/wiki/Postfix]http://fr.wikipedia.org/wiki/Postfix[/url]
+[url=http://www.postfix.org/documentation.html]http://www.postfix.org/documentation.html[/url][/quote]
+
+On commence par installer Postfix avec le support de mysql. Les domaines, comptes utilisateurs et alias seront ainsi gérés directement au sein d'une base de données, que vous pourrez administrer grâce à vos outils habituels, comme phpMyAdmin par exemple.
+[code]apt-get install postfix postfix-mysql[/code]
+
+Lors de l'installation de Postfix, vous devez choisir le type du serveur de messagerie, choisissez  "[b]Site Internet[/b]" pour utiliser SMTP :
+
+[img]http://i.imgur.com/ZAd1DuR.png[/img]
+
+Ensuite une autre fenêtre apparaît et vous demande le nom du système de mail, entrez alors le [b]FQDN[/b] de votre serveur.
+
+[h]2 - Création de la base de donnée[/h]
+
+[code]
+# Connexion au serveur MySQL en tant que root
+mysql -u root -p
+
+# Création de la base de données "postfix"
+mysql> CREATE database postfix;
+
+# Création de l'utilisateur "postfix" et ajout des permissions
+mysql> CREATE USER 'postfix'@'localhost' IDENTIFIED BY 'MOT DE PASSE';
+mysql> GRANT USAGE ON *.* TO 'postfix'@'localhost';
+mysql> GRANT ALL PRIVILEGES ON postfix.* TO 'postfix'@'localhost';
+
+# On quitte la console MySQL
+mysql> exit
+[/code]
+
+Vous pouvez aussi passer par [b]phpMyAdmin[/b] en créant un nouvel utilisateur nommé [b]postfix[/b] qui a tous les privilèges sur la bdd [b]postfix[/b].
+
+[h]3 - Installation et configuration de PostfixAdmin[/h]
+
+[quote]Liens utiles :
+[url=http://postfixadmin.sourceforge.net/]http://postfixadmin.sourceforge.net/[/url]
+[/quote]
+
+PostfixAdmin est une interface web qui permet de gérer simplement vos domaines, vos adresses virtuelles ainsi que vos alias. Dès que vous aurez besoin d'une nouvelle adresse email, c'est par cette interface qu'il faudra passer.
+
+Il faut dans un premier temps télécharger l'archive la plus récente et la décompresser sur le serveur :
+[code]
+cd /var/www
+
+wget http://downloads.sourceforge.net/project/postfixadmin/postfixadmin/postfixadmin-2.92/postfixadmin-2.92.tar.gz
+tar -xzf postfixadmin-2.92.tar.gz
+mv postfixadmin-2.92 postfixadmin
+rm -rf postfixadmin-2.92.tar.gz
+chown -R www-data:www-data postfixadmin
+
+apt-get install php5-imap
+[/code]
+
+Editez le fichier de configuration et modifiez les paramètres suivants :
+
+[code]
+# vim /var/www/postfixadmin/config.inc.php
+
+$CONF['configured'] = true;
+$CONF['default_language'] = 'fr';
+$CONF['database_type'] = 'mysqli';
+$CONF['database_host'] = 'localhost';
+$CONF['database_user'] = 'postfix';
+$CONF['database_password'] = 'MOT DE PASSE';
+$CONF['database_name'] = 'postfix';
+$CONF['admin_email'] = 'admin@domain.tld';
+$CONF['domain_path'] = 'YES';
+$CONF['domain_in_mailbox'] = 'NO';
+$CONF['fetchmail'] = 'NO';
+[/code]
+
+Ajouter un nouveau virtual host Nginx (à adapter selon votre configuration) :
+
+[code]
+# vim /etc/nginx/sites-enabled/postfixadmin.conf
+
+server {
+   listen 80;
+   server_name     postfixadmin.domain.tld;
+   root            /var/www/postfixadmin;
+   index           index.php;
+   charset         utf-8;
+
+   location / {
+      try_files $uri $uri/ index.php;
+   }
+
+   location ~* \.php$ {
+        include       /etc/nginx/fastcgi_params;
+        fastcgi_pass  unix:/var/run/php5-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+   }
+}[/code]
+
+Redémarrez Nginx pour prendre en compte le nouveau vhost :
+
+[code]service nginx restart[/code]
+
+Lancez l'assistant d'installation de PostfixAdmin à l'adresse suivante et suivez les indications : 
+
+[quote][url]http://postfixadmin.domain.tld/setup.php[/url][/quote]
+
+Le script créé toutes les tables nécessaires au bon fonctionnement de Postfix. En bas de la page générez le hash du mot de passe d'installation et créez un compte administrateur (exemple : admin@domain.tld). C'est à partir de ce compte que vous allez gérer toutes vos adresses emails. [b]Attention:[/b] admin@domain.tld n'est qu'un compte administrateur, l'adresse email n'existe pas. Si vous voulez la créer, il faudra passer par postfixadmin, comme on va le voir par la suite.
+
+Il ne vous reste plus qu'à mettre le hash généré par l'assistant dans le fichier [b]config.inc.php[/b] :
+
+[code]
+# vim /var/www/postfixadmin/config.inc.php
+
+$CONF['setup_password'] = 'HASH';
+[/code]
+
+Vous pouvez maintenant vous connecter via le formulaire de connexion : 
+
+[quote][url]http://postfixadmin.domain.tld/login.php[/url][/quote]
+
+On va commencer par ajouter un nouveau domaine, dans notre exemple il s'agit de [b]domain.tld[/b] :
+
+[img]http://i.imgur.com/15VJ5Lu.png[/img]
+
+Et une adresse email, par exemple [b]admin@domain.tld[/b] et [b]contact@domain.tld[/b] :
+
+[img]http://i.imgur.com/PxDxaLJ.png[/img]
+
+Voila, vous avez ajouté votre première adresse email, like a boss, maintenant on va passer aux choses sérieuses :cool:
+
+[h]4 - Configuration de Postfix[/h]
+
+Maintenant nous allons devoir configurer Postfix pour qu'il prenne en charge correctement les connexions SMTP et l'envoie des messages sur le réseau pour chaque utilisateur créé via PostfixAdmin.
+
+Faites une sauvegarde du fichier de conf de Postfix :
+
+[code]
+cp /etc/postfix/main.cf /etc/postfix/main.cf.bak
+[/code]
+
+Ce fichier de configuration est assez complexe, on va voir ensemble comment le configurer correctement. J'ai séparé par bloc de configuration pour que ça soit plus facile à comprendre. Vous retrouverez à la fin de cette section l'ensemble de la configuration de Postfix, n'hésitez pas à faire un diff avec le votre pour voir si vous n'avez pas fait d'erreur.
+
+On va commencer par définir quelques règles (restrictions) au niveau du protocole SMTP afin de sécuriser les échanges et avoir un cadre plus restrictif lors de l'envoie des emails. Attention un client mail mal configuré ou obsolète peut ne pas fonctionner avec cette configuration, à vous d'adapter la configuration en fonction de vos besoins.
+[code]
+# vim /etc/postfix/main.cf
+
+# Règles sur les adresses de destination
+# permit_sasl_authenticated : Accepter la connexion lorsque le client est authentifié
+# reject_non_fqdn_recipient : Refuser les adresses de destinations invalides (non FQDN)
+smtpd_recipient_restrictions =
+     permit_mynetworks,
+     permit_sasl_authenticated, 
+     reject_non_fqdn_recipient, 
+     reject_unauth_destination, 
+     reject_unknown_recipient_domain,
+     reject_rbl_client zen.spamhaus.org
+
+# Règles sur l'échange HELO qui survient avant la connexion
+# reject_invalid_helo_hostname : Refuser les échanges HELO invalides
+# reject_non_fqdn_helo_hostname : Refuser les noms d'hôte invalides (non FQDN)
+# reject_unknown_helo_hostname : Refuser les noms d'hôte qui n'ont pas de champ DNS A ou MX dans leurs DNS. 
+smtpd_helo_restrictions =
+     permit_mynetworks,
+     permit_sasl_authenticated,
+     reject_invalid_helo_hostname,  
+     reject_non_fqdn_helo_hostname, 
+     # reject_unknown_helo_hostname   
+
+# Règles de connexion des clients
+# permit_sasl_authenticated : Accepter la connexion lorsque le client est authentifié
+# reject_plaintext_session : Refuser les connexions non sécurisées
+# reject_unauth_pipelining : Refuser les défauts lors de la connexion
+smtpd_client_restrictions =
+     permit_mynetworks,
+     permit_inet_interfaces,
+     permit_sasl_authenticated,   
+     # reject_plaintext_session,    
+     # reject_unauth_pipelining     
+
+# Règles sur les expéditeurs
+# reject_non_fqdn_sender : Refuser les expéditeurs invalides (non FQDN)
+# reject_unknown_sender_domain : Refuser les expéditeurs qui n'ont pas de champ DNS A ou MX dans leurs DNS. 
+smtpd_sender_restrictions =
+     reject_non_fqdn_sender,      
+     reject_unknown_sender_domain
+[/code]
+
+Ensuite nous allons définir les paramètres de chiffrement via TLS :
+
+[code]
+# Smtp ( OUTGOING )
+smtp_tls_loglevel            = 1
+smtp_tls_security_level      = may
+smtp_tls_CAfile              = /etc/ssl/certs/CAroot.crt
+smtp_tls_protocols           = !SSLv2, !SSLv3, TLSv1
+smtp_tls_mandatory_protocols = !SSLv2, !SSLv3, TLSv1
+smtp_tls_mandatory_ciphers   = high
+smtp_tls_exclude_ciphers     = aNULL, eNULL, EXPORT, DES, RC4, MD5, PSK, aECDH, EDH-DSS-DES-CBC3-SHA, EDH-RSA-DES-CDC3-SHA, KRB5-DE5, CBC3-SHA
+
+# ---------------------------------------------------------------------------------------------------
+
+# Smtpd ( INCOMING )
+smtpd_tls_loglevel            = 1
+smtpd_tls_auth_only           = yes
+smtpd_tls_security_level      = may
+smtpd_tls_received_header     = yes
+smtpd_tls_protocols           = !SSLv2, !SSLv3, TLSv1
+smtpd_tls_mandatory_protocols = !SSLv2, !SSLv3, TLSv1
+smtpd_tls_mandatory_ciphers   = high
+smtpd_tls_exclude_ciphers     = aNULL, eNULL, EXPORT, DES, RC4, MD5, PSK, aECDH, EDH-DSS-DES-CBC3-SHA, EDH-RSA-DES-CDC3-SHA, KRB5-DE5, CBC3-SHA
+smtpd_tls_CAfile              = /etc/ssl/certs/CAroot.crt
+smtpd_tls_cert_file           = /etc/ssl/certs/mailserver.crt
+smtpd_tls_key_file            = /etc/ssl/private/mailserver.key
+smtpd_tls_dh1024_param_file   = $config_directory/dh2048.pem
+smtpd_tls_dh512_param_file    = $config_directory/dh512.pem
+smtpd_tls_eecdh_grade         = ultra
+
+tls_eecdh_strong_curve = prime256v1
+tls_eecdh_ultra_curve  = secp521r1
+tls_preempt_cipherlist = yes
+tls_random_source      = dev:/dev/urandom
+
+smtp_tls_session_cache_database  = btree:${data_directory}/smtp_scache
+smtpd_tls_session_cache_database = btree:${data_directory}/smtpd_scache
+lmtp_tls_session_cache_database  = btree:${data_directory}/lmtp_scache
+[/code]
+
+Si vous n'avez pas de certificat SSL, exécutez les commandes suivantes pour en générer un (attention il s'agira d'un certificat auto-signé par votre propre autorité de certification) :
+
+[code]
+cd /etc/ssl/
+
+openssl genrsa -out CAroot.key 4096
+openssl req -x509 -new -nodes -days 1460 -key CAroot.key -out CAroot.crt
+
+Country Name (2 letter code) [AU]: FR
+State or Province Name (full name) [Some-State]: France
+Locality Name (eg, city) []: Paris
+Organization Name (eg, company) [Internet Widgits Pty Ltd]: Mon Autorité De Certification
+Organizational Unit Name (eg, section) []:IT
+Common Name (e.g. server FQDN or YOUR name) []: *.domain.tld
+[/code]
+
+[code]
+openssl genrsa -out mailserver.key 4096
+openssl req -new -key mailserver.key -out mailserver.csr
+
+Country Name (2 letter code) [AU]: FR
+State or Province Name (full name) [Some-State]: France
+Locality Name (eg, city) []: Paris
+Organization Name (eg, company) [Internet Widgits Pty Ltd]: Mon serveur de mail
+Organizational Unit Name (eg, section) []:IT
+Common Name (e.g. server FQDN or YOUR name) []: mail.domain.tld
+[/code]
+
+[code]
+openssl x509 -req -days 1460 -in mailserver.csr -CA CAroot.crt -CAkey CAroot.key -CAcreateserial -out mailserver.crt
+
+chmod 444 CAroot.crt
+chmod 444 mailserver.crt
+chmod 400 CAroot.key
+chmod 400 mailserver.key
+
+mv CAroot.key private/
+mv CAroot.crt certs/
+mv mailserver.key private/
+mv mailserver.crt certs/
+[/code]
+
+Création des paramètres Diffie-Hellman :
+[code]
+openssl dhparam -out /etc/postfix/dh2048.pem 2048
+openssl dhparam -out /etc/postfix/dh512.pem 512
+[/code]
+
+Ensuite nous allons définir les paramètres de connexion via SASL :
+
+[code]
+# Paramètres de connexion SASL
+# C'est ici que l'on déclare Dovecot comme une passerelle pour authentifier les utilisateurs.
+# Postfix peut s'appuyer sur Dovecot pour identifier les connexions SMTP.
+smtpd_sasl_auth_enable          = yes
+smtpd_sasl_type                 = dovecot
+smtpd_sasl_path                 = private/auth
+smtpd_sasl_security_options     = noanonymous
+smtpd_sasl_tls_security_options = $smtpd_sasl_security_options
+smtpd_sasl_local_domain         = $mydomain
+smtpd_sasl_authenticated_header = yes
+
+broken_sasl_auth_clients = yes
+[/code]
+
+Maintenant on va s'occuper de la gestion et du stockage des emails. Dans la suite de ce tutoriel nous allons créer un utilisateur nommé [b]vmail[/b] avec UID/GID de [b]5000[/b], avec un HOME par défaut pointant sur [b]/var/mail[/b]. Postfix doit le savoir donc on lui indique avec les 4 paramètres suivants :
+
+[code]
+virtual_uid_maps        = static:5000
+virtual_gid_maps        = static:5000
+virtual_minimum_uid     = 5000
+virtual_mailbox_base    = /var/mail
+[/code]
+
+Les 3 règles suivantes permettent à Postfix de savoir comment se connecter et lire la base de donnée afin de récupérer des informations sur les différents domaines, adresses virtuelles et alias. Nous allons détailler le contenu de ces 3 fichiers juste après. 
+
+[code]
+virtual_mailbox_domains = mysql:/etc/postfix/mysql-virtual-mailbox-domains.cf
+virtual_mailbox_maps    = mysql:/etc/postfix/mysql-virtual-mailbox-maps.cf
+virtual_alias_maps      = mysql:/etc/postfix/mysql-virtual-alias-maps.cf
+[/code]
+
+Le paramètre [b]virtual_transport[/b] est très très important, il permet à Postfix de savoir où envoyer les emails reçus. Dans notre cas, on utilise le protocole [b]LMTP[/b] pour les acheminer jusqu'à Dovecot :
+
+[code]
+virtual_transport = lmtp:unix:private/dovecot-lmtp
+[/code]
+
+Il ne reste plus qu'à definir les paramètres généraux. N'oubliez pas de modifier la valeur de [b]myhostname[/b] et [b]myorigin[/b] en indiquant votre [b]FQDN[/b].
+
+[code]
+smtpd_banner         = $myhostname ESMTP $mail_name (Debian/GNU)
+biff                 = no
+append_dot_mydomain  = no
+readme_directory     = no
+delay_warning_time   = 4h
+mailbox_command      = procmail -a "$EXTENSION"
+recipient_delimiter  = +
+disable_vrfy_command = yes
+message_size_limit   = 502400000
+mailbox_size_limit   = 1024000000
+
+inet_interfaces = all
+inet_protocols = ipv4
+
+myhostname    = hostname.domain.tld
+myorigin      = hostname.domain.tld
+mydestination = localhost localhost.$mydomain
+mynetworks    = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+relayhost     =
+
+alias_maps     = hash:/etc/aliases
+alias_database = hash:/etc/aliases
+[/code]
+
+C'est terminé pour le fichier de configuration principale, je vous l'accorde il y a pas mal de paramètres à prendre en compte mais dans le cas d'un serveur SMTP c'est pas étonnant. Vous pouvez aller voir la documentation de Postfix si vous voulez avoir plus d'informations sur sa configuration. [url]http://www.postfix.org/postconf.5.html[/url]
+
+[quote]Fichier de configuration complet  : [url]https://gist.github.com/hardware/b26918353c6325c09310[/url][/quote]
+
+[h]Configuration de Postfix pour MySQL[/h]
+
+On peut maintenant créer les 3 trois fichiers de configuration qui vont permettrent à Postfix d'intéragir avec MySQL :
+
+[code]
+# vim /etc/postfix/mysql-virtual-mailbox-domains.cf
+
+hosts = 127.0.0.1
+user = postfix
+password = MOT DE PASSE
+dbname = postfix
+
+query = SELECT domain FROM domain WHERE domain='%s' and backupmx = 0 and active = 1
+[/code]
+
+[code]
+# vim /etc/postfix/mysql-virtual-mailbox-maps.cf
+
+hosts = 127.0.0.1
+user = postfix
+password = MOT DE PASSE
+dbname = postfix
+
+query = SELECT maildir FROM mailbox WHERE username='%s' AND active = 1
+[/code]
+
+[code]
+# vim /etc/postfix/mysql-virtual-alias-maps.cf
+
+hosts = 127.0.0.1
+user = postfix
+password = MOT DE PASSE
+dbname = postfix
+
+query = SELECT goto FROM alias WHERE address='%s' AND active = 1
+[/code]
+
+Si vous voulez activer le port 587 pour vous connecter de manière sécurisé par SMTPS avec n'importe quel client mail, il faut décommenter/modifier les lignes suivantes dans le fichier [b]/etc/postfix/master.cf [/b]:
+
+[code]
+submission inet n       -       -       -       -       smtpd
+  -o syslog_name=postfix/submission
+  -o smtpd_tls_dh1024_param_file=${config_directory}/dh2048.pem
+  -o smtpd_tls_security_level=encrypt
+  -o smtpd_sasl_auth_enable=yes
+  -o smtpd_client_restrictions=permit_sasl_authenticated,reject
+[/code]
+
+Et n'oubliez pas de décommentez cette ligne aussi si ce n'est pas déjà fait :
+
+[code]smtp  inet  n       -       -       -       -       smtpd[/code]
+
+[quote]Fichier de configuration complet : [url]https://gist.github.com/hardware/dcc120df9329da7f40ec[/url][/quote]
+
+[h]5 - Installation de Dovecot[/h]
+
+[quote]Liens utiles :
+[url=http://fr.wikipedia.org/wiki/Dovecot]http://fr.wikipedia.org/wiki/Dovecot[/url]
+[url=http://wiki2.dovecot.org/]http://wiki2.dovecot.org/[/url][/quote]
+
+[code]apt-get install dovecot-core dovecot-imapd dovecot-lmtpd dovecot-mysql[/code]
+
+[h]6 - Configuration de dovecot[/h]
+
+Ajoutez la liste des protocoles activés après l'instruction "!include_try" dans le fichier [b]/etc/dovecot/dovecot.conf[/b]. Dans notre cas, nous allons activer [b]IMAP[/b] pour la récupération des emails via le port 993 et [b]LMTP[/b] pour l'acheminement des emails entre Postfix et Dovecot :
+
+[code]
+# vim /etc/dovecot/dovecot.conf
+
+!include_try /usr/share/dovecot/protocols.d/*.protocol
+protocols = imap lmtp
+listen = *
+
+# Assurez-vous que cette ligne est bien décommentée :
+!include conf.d/*.conf
+[/code]
+
+[quote]Fichier de configuration complet : [url]https://gist.github.com/hardware/ce55b0d241e229d5176a[/url][/quote]
+
+On indique le chemin du conteneur local qui contiendra tous nos emails. Editez le fichier [b]10-mail.conf [/b] :
+
+[code]
+# vim /etc/dovecot/conf.d/10-mail.conf
+
+# Le contenur local est organisé de cette manière :
+# /var/mail/vhosts/domain.tld/utilisateur
+mail_location = maildir:/var/mail/vhosts/%d/%n/mail
+
+namespace inbox {
+    inbox = yes
+}
+
+mail_uid = 5000
+mail_gid = 5000
+
+first_valid_uid = 5000
+last_valid_uid = 5000
+
+mail_privileged_group = vmail
+[/code]
+
+[quote]Fichier de configuration complet : [url]https://gist.github.com/hardware/0fd157d8e83e09b50cb9[/url][/quote]
+
+Les emails seront stockés dans le répertoire /var/mail. On doit donc créer un répertoire correspondant à notre domaine (celui qui est présent dans la table domain).
+
+[code]
+mkdir -p /var/mail/vhosts/domain.tld
+[/code]
+
+Maintenant on ajoute un nouvel utilisateur et un nouveau groupe nommé [b]vmail[/b] avec un UID/GID de 5000 :
+
+[code]
+groupadd -g 5000 vmail 
+useradd -g vmail -u 5000 vmail -d /var/mail
+chown -R vmail:vmail /var/mail
+[/code]
+
+Editer le fichier [b]10-auth.conf[/b] et modifier les lignes suivantes :
+
+[code]
+# vim /etc/dovecot/conf.d/10-auth.conf
+
+disable_plaintext_auth = yes
+auth_mechanisms = plain login
+#!include auth-system.conf.ext # Commenter cette ligne
+!include auth-sql.conf.ext     # décommenter cette ligne
+[/code]
+
+[quote]Fichier de configuration complet : [url]https://gist.github.com/hardware/3a70923d37e6ad7c1859[/url][/quote]
+
+Maintenant on va définir deux méthodes qui vont permettrent à Dovecot de savoir comment obtenir les utilisateurs et les mots de passe correspondants lors de la connexion. Editez le fichier [b]auth-sql.conf.ext[/b] :
+
+[code]
+# vim /etc/dovecot/conf.d/auth-sql.conf.ext
+
+# Le mot de passe est obtenu à partir de la base de donnée
+passdb {
+  driver = sql
+  args = /etc/dovecot/dovecot-sql.conf.ext
+}
+
+# Par contre le nom d'utilisateur est obtenu de manière statique à partir du conteneur local
+# %d = domaine.tld
+# %n = utilisateur
+userdb {
+  driver = static
+  args = uid=vmail gid=vmail home=/var/mail/vhosts/%d/%n
+} 
+[/code]
+
+Ensuite editez le fichier [b]dovecot-sql.conf.ext[/b] et modifiez les paramètres suivants :
+
+[code]
+# vim /etc/dovecot/dovecot-sql.conf.ext
+
+# Paramètres de connexion
+driver = mysql
+connect = host=127.0.0.1 dbname=postfix user=postfix password=MOT DE PASSE
+
+# Permet de définir l'algorithme de hachage.
+# Pour plus d'information: http://wiki2.dovecot.org/Authentication/PasswordSchemes
+# /!\ ATTENTION : ne pas oublier de modifier le paramètre $CONF['encrypt'] de PostfixAdmin
+default_pass_scheme = MD5-CRYPT
+
+# Requête de récupération du mot de passe du compte utilisateur
+password_query = SELECT password FROM mailbox WHERE username = '%u'
+[/code]
+
+Modifiez les permissions sur le répertoire [b]/etc/dovecot[/b] :
+
+[code]
+chown -R vmail:dovecot /etc/dovecot
+chmod -R o-rwx /etc/dovecot 
+[/code]
+
+Editer le fichier [b]10-master.conf[/b] avec le contenu suivant :
+
+[code]
+# vim /etc/dovecot/conf.d/10-master.conf
+
+service imap-login {
+
+  inet_listener imap {
+    port = 143
+  }
+
+  inet_listener imaps {
+    port = 993
+    ssl = yes
+  }
+
+  service_count = 0
+
+}
+
+service imap {
+
+}
+
+service lmtp {
+
+  # On autorise Postfix à transférer les emails dans le spooler de Dovecot via LMTP
+  unix_listener /var/spool/postfix/private/dovecot-lmtp {
+      mode = 0600
+      user = postfix
+      group = postfix
+  }
+
+}
+
+service auth {
+
+  # On autorise Postfix à se connecter à Dovecot via LMTP
+  unix_listener /var/spool/postfix/private/auth {
+      mode = 0666
+      user = postfix
+      group = postfix
+  }
+
+  # On indique à Dovecot les permissions du conteneur local
+  unix_listener auth-userdb {
+      mode = 0600
+      user = vmail
+      group = vmail
+  }
+
+  user = dovecot
+
+}
+
+service auth-worker {
+
+  user = vmail
+
+}
+[/code]
+
+[quote]Fichier de configuration complet : [url]https://gist.github.com/hardware/cdc1bae0a7e306501d15[/url][/quote]
+
+Enfin, editez le fichier [b]10-ssl.conf[/b] et modifiez les paramètres suivants :
+
+[code]
+# vim /etc/dovecot/conf.d/10-ssl.conf
+
+ssl = required
+ssl_cert = </etc/ssl/certs/mailserver.crt
+ssl_key = </etc/ssl/private/mailserver.key
+ssl_protocols = !SSLv2 !SSLv3
+ssl_cipher_list = ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA
+ssl_prefer_server_ciphers = yes
+ssl_dh_parameters_length = 2048
+[/code]
+
+[quote]Fichier de configuration complet : [url]https://gist.github.com/hardware/91ed5e01929b8b414ae0[/url][/quote]
+
+[h]7 - Redémarrage des services et vérification des ports[/h]
+
+On redémarre Postfix et Dovecot :
+[code]
+service postfix restart
+service dovecot restart
+[/code]
+
+Puis on vérifie que les ports [b]25[/b] (SMTP), [b]587[/b] (SMTPS) et [b]993[/b] (IMAPS) sont bien en écoute sur 0.0.0.0. N'oubliez pas de les ouvrir au niveau de votre Firewall :
+[quote]
+[b]netstat -ptna[/b]
+[...]
+tcp        0      0 0.0.0.0:25              0.0.0.0:*               LISTEN      4995/master 
+tcp        0      0 0.0.0.0:587             0.0.0.0:*               LISTEN      4995/master          
+tcp        0      0 0.0.0.0:993             0.0.0.0:*               LISTEN      5030/dovecot
+[...]
+[/quote]
+
+On peut faire un petit essai via telnet avec la commande suivante depuis le serveur :
+
+[code]
+telnet localhost 25
+# Puis faites lui un petit coucou <3
+ehlo localhost 
+[/code]
+
+Normalement si tout se passe bien, vous allez obtenir la réponse suivante :
+
+[quote]
+250-hostname.domain.tld
+250-PIPELINING
+250-SIZE 10240000
+250-VRFY
+250-ETRN
+[b]250-STARTTLS[/b]
+250-ENHANCEDSTATUSCODES
+250-8BITMIME
+250 DSN
+[/quote]
+
+Si vous voyez [b]250-STARTTLS[/b], c'est que le serveur supporte bien l'authentification par [b]STARTTLS[/b].
+
+[h]8 - Exemple de configuration d'un client mail : Thunderbird[/h]
+
+La configuration du client mail reste relativement simple, il ne faut juste pas se tromper de port :
+
+[img]http://i.imgur.com/lE1x5kF.png[/img]
+
+Les adresses [b]imap.domain.tld[/b] et [b]smtp.domain.tld[/b] sont arbitraires, vous pouvez très bien mettre à la place le FQDN de votre serveur (exemple: hostname.domain.tld), ça marchera très bien aussi. Le plus important ce sont les ports et les algorithmes de chiffrement/d'authentification (SSL/TLS - STARTTLS).
+
+[h]9 - Tests de fonctionnement[/h]
+
+On va regarder les logs pour pour voir si il n'y a pas de soucis au niveau de la configuration du serveur mail.
+
+[b]Premier test : connexion via IMAP[/b]
+
+Pour réaliser ce test, vous avez juste à ouvrir votre client mail pour que la connexion se fasse. En même temps, exécutez la commande suivante sur votre serveur :
+
+[code]tail -f /var/log/mail.log[/code]
+
+Si vous avez les deux lignes suivantes c'est que la connexion IMAP/TLS est OK (ouf :P)
+[code]
+tail -f /var/log/mail.log
+
+Aug 16 19:37:11 hostname dovecot: auth-worker(xxx): mysql(127.0.0.1): Connected to database postfix
+Aug 16 19:37:11 hostname dovecot: imap-login: Login: user=<contact@domain.tld>, method=PLAIN, rip=ADRESSE IP CLIENT, lip=ADRESSE IP SERVEUR, mpid=xxx, TLS, session=<xxxxxxxx>
+[/code]
+
+[b]Deuxième test : envoie par SMTP ( Sarah envoie un email à Bob )[/b]
+
+Si vous avez les lignes suivantes dans le fichiers mail.log, c'est que la connexion SASL et l'envoie par SMTPS sont OK (ça c'est cool :lol:)
+[code]
+tail -f /var/log/mail.log
+
+Aug 16 19:54:13 hostname postfix/submission/smtpd[xxx]: connect from [VOTRE ADRESSE IP]
+Aug 16 19:54:14 hostname dovecot: auth-worker(xxx): mysql(127.0.0.1): Connected to database postfix
+Aug 16 19:54:14 hostname postfix/submission/smtpd[xxx]: client=[VOTRE ADRESSE IP], sasl_method=PLAIN, sasl_username=sarah.connor@terminator.net
+Aug 16 19:54:15 hostname postfix/smtp[xxx]: to=<bob@nsa.gov>, relay=[ADRESSE IP RELAI]:25, status=sent (250 OK)[/code]
+
+[b]Troisième test : réception par IMAP ( Bob envoie un email à Sarah )[/b]
+
+Si vous avez les lignes suivantes dans le fichiers mail.log, c'est que la réception par IMAP et le transfert de l'email par LMTP sont bons aussi.
+[code]Aug 16 20:04:58 hostname postfix/smtpd[xxx]: Anonymous TLS connection established from mail.nsa.gov: TLSv1 with cipher ECDHE-RSA-RC4-SHA (128/128 bits)
+Aug 16 20:05:00 hostname postfix/qmgr[xxx]: from=<bob@nsa.gov>, size=1748, nrcpt=1 (queue active)
+Aug 16 20:05:01 hostname dovecot: lmtp(xxx, sarah.connor@terminator.net): saved mail to INBOX
+Aug 16 20:05:01 hostname postfix/lmtp[xxx]: to=<sarah.connor@terminator.net>, relay=mail.domain.tld[private/dovecot-lmtp], status=sent (250 2.0.0 <sarah.connor@terminator.net> Saved)[/code]
+
+[h]10 - Test d'indésirabilité (spam) de vos emails :[/h]
+
+Allez sur ce site : [url]http://www.mail-tester.com/[/url] et envoyez un email à l'adresse indiquée en page d'accueil et vérifiez votre score. Normalement il ne devrait pas être suffisant pour que vous puissiez envoyer sereinement vos emails partout dans le monde. La première fois, je me suis pris 2.6/10 :|
+
+[img]http://i.imgur.com/dMVBYhu.png[/img]
+
+Vous obtiendrez la note maximum, si et seulement si :
+
+[quote]- Votre message est sain et bien formaté
+- Votre serveur n'est pas blacklisté
+- Votre reverse / FQDN est correctement configuré
+- DKIM (DomainKeys Identified Mail) est installé et configuré sur votre serveur
+- Le champ Sender Policy Framework (SPF) est mis en place dans le fichier de zone de votre domaine
+- Le champ MX est mis en place dans le fichier de zone de votre domaine[/quote]
+
+
+[h]11 - Installation et configuration d'OpenDKIM[/h]
+
+[b]DKIM[/b] est un standard permettant d'associer de manière forte une entité ou une organisation avec un domaine au sein d'un email. On se déclare donc complètement responsable de la transmission du message sur le réseau. DKIM fonctionne par [b]cryptographie asymétrique[/b], le [b]MTA[/b] (Mail Transfer Agent, dans notre cas il s'agit de Postfix) se charge de signer numériquement tous les emails envoyés avec une clé privée contenue sur le serveur. Le destinataire peut alors vérifier l'intégrité du corps ainsi que les en-têtes du message grâce à la clé publique fournie par le [b]domainkey[/b], qui est un champ [b]TXT[/b] contenu dans les fichiers de zone de vos DNS.
+
+[quote]
+Liens utiles :
+[url]http://fr.wikipedia.org/wiki/DomainKeys_Identified_Mail[/url]
+[url]http://www.opendkim.org/docs.html[/url]
+[/quote]
+
+On commence par installer OpenDKIM :
+[code]apt-get install opendkim opendkim-tools[/code]
+
+Editez le fichier de configuration [b]opendkim.conf[/b] avec le contenu suivant :
+[code]
+# vim /etc/opendkim.conf
+
+AutoRestart             Yes
+AutoRestartRate         10/1h
+UMask                   002
+Syslog                  Yes
+SyslogSuccess           Yes
+LogWhy                  Yes
+
+OversignHeaders         From
+AlwaysAddARHeader       Yes
+Canonicalization        relaxed/simple
+
+ExternalIgnoreList      refile:/etc/opendkim/TrustedHosts
+InternalHosts           refile:/etc/opendkim/TrustedHosts
+KeyTable                refile:/etc/opendkim/KeyTable
+SigningTable            refile:/etc/opendkim/SigningTable
+
+Mode                    sv
+PidFile                 /var/run/opendkim/opendkim.pid
+SignatureAlgorithm      rsa-sha256
+
+UserID                  opendkim:opendkim
+
+Socket                  local:/var/spool/postfix/opendkim/opendkim.sock
+[/code]
+
+Pour que Postfix puisse communiquer avec OpenDKIM, on va utiliser un socket, il faut créer le répertoire /var/spool/postfix/opendkim
+
+[code]
+mkdir /var/spool/postfix/opendkim
+chown opendkim: /var/spool/postfix/opendkim
+usermod -aG opendkim postfix
+[/code]
+
+Ensuite on doit indiquer à Postfix comment s'interfacer avec OpenDKIM. Pour cela, editer le fichier [b]main.cf[/b] et ajouter les lignes suivantes à fin du fichier de configuration :
+
+[code]
+# vim /etc/postfix/main.cf
+
+milter_protocol = 6
+milter_default_action = accept
+smtpd_milters = unix:/opendkim/opendkim.sock
+non_smtpd_milters = unix:/opendkim/opendkim.sock
+[/code]
+
+Créér le répertoire suivant :
+
+[code]
+mkdir -p /etc/opendkim/keys
+[/code]
+
+Ajoutez le fichier [b]TrustedHosts[/b] avec le contenu suivant :
+
+[code]
+# vim /etc/opendkim/TrustedHosts
+
+127.0.0.1
+localhost
+::1
+*.domain.tld
+[/code]
+
+[b]N'oubliez pas de modifier domain.tld par votre nom de domaine.[/b]
+
+Ajoutez le fichier [b]KeyTable[/b] avec le contenu suivant. Dans cet exemple, nous utiliserons un sélecteur nommé [b]mail[/b]. Vous pouvez le nommer comme vous le souhaitez.
+
+[code]
+# vim /etc/opendkim/KeyTable
+
+mail._domainkey.domain.tld domain.tld:mail:/etc/opendkim/keys/domain.tld/mail.private
+[/code]
+
+Ajoutez le fichier [b]SigningTable[/b] avec le contenu suivant :
+
+[code]
+# vim /etc/opendkim/SigningTable
+
+*@domain.tld mail._domainkey.domain.tld
+[/code]
+
+[h]Création de la clé publique et privée[/h]
+
+Création du répertoire qui contiendra les clés :
+[code]
+cd /etc/opendkim/keys
+mkdir domain.tld && cd domain.tld
+[/code]
+
+Génération des clés de chiffrement :
+
+[code]
+# Paramètres : -s [sélecteur] -d [nom de domaine]
+opendkim-genkey -s mail -d domaine.tld -b 4096
+[/code]
+
+Modification des permissions de la clé privée :
+
+[code]
+chown opendkim:opendkim mail.private
+[/code]
+
+Les permissions doivent être les suivantes (chmod 400) :
+
+[code]
+ls -lX /etc/opendkim/keys/domain.tld/
+
+-rw------- 1 opendkim opendkim 887 août  16 11:28 mail.private
+-rw------- 1 root     root     305 août  16 11:28 mail.txt
+[/code]
+
+[h]Modification des DNS : Ajout de la clé publique[/h]
+
+Copiez le contenu du fichier mail.txt (la clé publique) :
+
+[code]cat mail.txt[/code]
+
+Et mettez le dans votre fichier de zone de votre domaine, soit depuis l'interface de votre registrar, soit avec BIND :
+
+[code]
+mail._domainkey IN TXT "k=rsa; p=CLE PUBLIQUE" ;
+[/code]
+
+Et pour finir, on redémarre tous les services :
+
+[code]
+service postfix  restart
+service dovecot  restart
+service opendkim restart
+[/code]
+
+Vous pouvez exécuter les commandes suivantes pour que les services démarrent automatiquement lors du boot :
+
+[code]
+# Debian 7
+update-rc.d postfix  defaults
+update-rc.d dovecot  defaults
+update-rc.d opendkim defaults
+
+# Debian 8
+systemctl enable postfix.service
+systemctl enable dovecot.service
+systemctl enable opendkim.service
+[/code]
+
+Attendez quelques minutes la propagation des DNS. Vous pouvez vérifier que le champ domainkey est bien visible en exécutant la commande suivante à partir de votre pc :
+
+[code]host -t TXT mail._domainkey.domain.tld[/code]
+
+Si elle retourne ce message :
+
+[quote]Host mail._domainkey.domain.tld not found: (NXDOMAIN)[/quote]
+
+C'est que vos DNS ne se sont pas encore propagés sur les serveurs de votre FAI, patientez encore un peu. :P
+Pour tester le bon fonctionnement d'OpenDKIM, utilisez le site que l'on a vu tout à l'heure : [url]http://www.mail-tester.com/[/url] 
+
+[h]12 - Ajouter un enregistrement SPF (Sender Policy Framework)[/h]
+
+[quote=Wikipédia]Sender Policy Framework (SPF) est une norme de vérification du nom de domaine de l'expéditeur d'un courrier électronique, normalisé dans la RFC 7208. L'adoption de cette norme est de nature à réduire le spam.[/quote]
+
+Ajoutez cette ligne dans le fichier de zone de votre nom de domaine :
+
+[code]
+@        IN      TXT     "v=spf1 a mx ip4:ADRESSE IP DE VOTRE SERVEUR ~all"
+[/code]
+
+Vous pouvez maintenant refaire un test sur ce site : [url]http://www.mail-tester.com/[/url]
+Si tout est bon, vous devriez avoir 10/10 :
+
+[img]http://i.imgur.com/xbufE6H.png[/img]
+
+[h]13 - DMARC (Domain-based Message Authentication, Reporting & Conformance)[/h]
+
+DMARC est une spécification technique assez récente (2011), qui est toujours en draft par l'IETF ( [url]https://datatracker.ietf.org/doc/rfc7489/[/url] ), les contributeurs initiaux sont un consortium de plusieurs géants d'internet comme AOL, Yahoo, Google, Microsoft, Paypal, Facebook...etc. Cette spécification permet de réduire l'usage abusif des e-mails, tels que le spam, le phishing en ajoutant une couche supplémentaire dans le processus d'authentification des mails. 
+
+En fait ce mécanisme utilise DKIM et SPF et permet d'informer les autres fournisseurs de mail des actions à entreprendre lorsqu'ils reçoivent un mail provenant de notre domaine. C'est peut-être pas très clair dit comme ça, mais c'est pas compliqué, prenons un exemple :
+
+Vous envoyez un mail à partir de votre adresse @domain.tld à un amis qui est chez Gmail. Google vas donc utiliser DMARC et demander à votre serveur ce qu'il doit faire lorsqu'il reçoit un mail appartenant à votre domaine. Votre serveur répond qu'il doit vérifier la validité de DKIM et SPF, si tout est valide le mail est envoyé au destinataire sinon il est soit mis en quarantaine (dossier spam), soit il n'est pas du tout envoyé (blocké au niveau de la couche smtp).
+
+Voici un ptit schéma :
+
+[center][img]http://i.imgur.com/R2JGo4o.jpg[/img][/center]
+
+Les règles de DMARC sont stockés dans un enregistrement de type TXT dans le fichier de zone de votre nom de domaine, exemple :
+
+[code]_dmarc  IN  TXT "
+    v=DMARC1; 
+    p=reject; 
+    rua=mailto:postmaster@domain.tld; 
+    ruf=mailto:admin@domain.tld; 
+    adkim=s;
+    aspf=s; 
+    pct=100; 
+    rf=afrf; 
+    sp=reject
+"
+[/code]
+
+Pour plus de clarté, j'ai sauté une ligne après chaque paramètre, mettez tout sur une ligne dans votre fichier de zone.
+Bon quelques explications s'imposent par rapport aux paramètres non ? :P
+
+[quote]
+- [b]_dmarc[/b] : L'enregistrement contenant votre politique vis à vis de DMARC se nomme [b]_dmarc[/b], donc il correspond au sous domaine : [b]_dmarc.domain.tld[/b]
+- [b]v=DMARC1[/b] : Version du protocole
+- [b]p=reject[/b] : Bloquer les mails qui ne respectent pas les identificateurs d'alignement
+- [b]rua=mailto[/b] : Aggregate reports - Adresse mail qui recevra les rapports des autres providers (gmail, outlook...etc) concernant DMARC comme les résultats d'authentification, les actions nécessaires à entreprendre pour corriger les soucis avec votre domaine...etc
+- [b]ruf=mailto[/b] : Failure report ou Forensic reports - Adresse mail qui recevra les alertes concernant DMARC (échec d'authentification....etc)
+- [b]adkim=s[/b] : Identificateur d'alignement DKIM, s = strict ( Organizational Domain configuré au sein de DKIM doit être strictement égal au "From Domain" )
+- [b]aspf=s[/b] : Identificateur d'alignement SFP, s = strict ( Organizational Domain configuré au sein de SPF doit être strictement égal au "From Domain" )
+- [b]pct=100[/b] : Pourcentage des messages sujet au filtrage DMARC
+- [b]rf=afrf[/b] : Authentication Failure Reporting Format - Format du rapport d'erreur
+- [b]sp=reject[/b] : Politique concernant les sous-domaines (voir p=reject plus haut)
+[/quote]
+
+[quote]Liens utiles :
+[url=http://dmarc.org/overview/]http://dmarc.org/overview/[/url]
+[url=http://www.kitterman.com/dmarc/assistant.html]http://www.kitterman.com/dmarc/assistant.html[/url][/quote]
+
+L'implémentation côté serveur est sensiblement similaire à OpenDKIM. Le paquet est disponible à partir de la branche Jessie de Debian, si vous êtes encore sous Debian 6/7, il faudra utiliser les backports.
+
+[code]apt-get install opendmarc[/code]
+
+Editer le fichier de configuration [b]opendmarc.conf[/b] avec le contenu suivant :
+
+[code]
+# vim /etc/opendmarc.conf
+
+AutoRestart             Yes
+AutoRestartRate         10/1h
+UMask                   0002
+Syslog                  true
+
+AuthservID              "hostname.domain.tld"
+TrustedAuthservIDs      "hostname.domain.tld"
+IgnoreHosts             /etc/opendkim/TrustedHosts
+
+RejectFailures          false
+
+UserID                  opendmarc:opendmarc
+PidFile                 /var/run/opendmarc.pid
+Socket                  local:/var/spool/postfix/opendmarc/opendmarc.sock[/code]
+
+Pour que Postfix puisse communiquer avec Opendmarc, on va utiliser un socket, il faut créer le répertoire [b]/var/spool/postfix/opendmarc[/b]
+
+[code]
+mkdir /var/spool/postfix/opendmarc
+chown opendmarc: /var/spool/postfix/opendmarc
+usermod -aG opendmarc postfix
+[/code]
+
+Ensuite dans le fichier /etc/postfix/main.cf, editer cette ligne :
+
+[code]smtpd_milters = unix:/opendkim/opendkim.sock, unix:/opendmarc/opendmarc.sock[/code]
+
+Puis on redémarre les services :
+
+[code]
+systemctl restart opendmarc
+systemctl restart postfix
+[/code]
+
+Un autre enregistrement peut-être définit dans vos DNS, il s'agit du "Signing Policy Statement" permettant de savoir si vous signez tous les mails sortants ou seulement quelques uns en particulier. Je sais pas si cet enregistrement est toujours d'actualité, je l'ai trouvé dans la RFC 4870 de 2007 ( [url]http://www.ietf.org/rfc/rfc4870.txt[/url] ) mais elle a été rendue obsolète par la RFC 4871 ( [url]http://www.ietf.org/rfc/rfc4871.txt[/url] ).
+
+L'enregistrement est le suivant :
+
+[code]_domainkey IN TXT "o=-; r=postmaster@domain.tld"[/code]
+
+[quote]
+- [b]o=-[/b] : Outbound Signing policy - Le "-" signifie que tous les mails sortants sont signés avec DKIM, un "~" signifie que certains mails peuvent être signés avec DKIM
+- [b]r=[/b] : Adresse mail pour le reporting d'erreur
+[/quote]
+
+Ça coute rien de le mettre, mais je suis pas certain de son utilité, n'hésitez pas à poster dans le fil de discussion si vous avez plus d'informations à ce sujet.
+
+[h]14 - Installation et configuration de Rainloop[/h]
+
+[center][img]http://i.imgur.com/2PvpLNY.png[/img][/center]
+
+Rainloop est un webmail opensource développé en PHP qui se veut complet et simple d'utilisation. Il gère très bien les protocoles IMAP/SMTP et dispose d'une interface moderne (HTML5/CSS3) très érgonomique, c'est plutôt agréable. Du côté des fonctionnalités, on retrouve toutes celles d'un client mail classique, avec en plus un système de plugins.
+
+Rainloop est très simple à mettre en place. Téléchargez le zip depuis le site officiel et décompressez-le dans le dossier [b]/var/www/rainloop[/b] :
+
+[code]
+wget http://repository.rainloop.net/v2/webmail/rainloop-latest.zip
+mkdir /var/www/rainloop
+unzip rainloop-latest.zip -d /var/www/rainloop
+rm -rf rainloop-latest.zip
+[/code]
+
+Modifiez les permissions pour que le serveur web ait accès au répertoire [b]/var/www/rainloop[/b]
+
+[code]
+cd /var/www/rainloop
+find . -type d -exec chmod 755 {} \;
+find . -type f -exec chmod 644 {} \;
+chown -R www-data:www-data .
+[/code]
+
+Ajouter un nouveau virtual host Nginx (à adapter selon votre configuration) :
+
+[code]
+# vim /etc/nginx/sites-enabled/rainloop.conf
+
+server {
+   listen 80;
+   server_name     webmail.domain.tld;
+   root            /var/www/rainloop;
+   index           index.php;
+   charset         utf-8;
+
+   location ^~ /data {
+      deny all;
+   }
+
+   location / {
+      try_files $uri $uri/ index.php;
+   }
+
+   location ~* \.php$ {
+        include       /etc/nginx/fastcgi_params;
+        fastcgi_pass  unix:/var/run/php5-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+   }
+}
+[/code]
+
+Redémarrez Nginx pour prendre en compte le nouveau vhost :
+
+[code]service nginx restart[/code]
+
+L'installation est maintenant terminée (2 minutes montre en main :P), nous allons passer à la configuration. Connectez-vous à l'interface d'administration via cette adresse :
+
+[quote]
+[url]http://webmail.domain.tld/?admin[/url]
+[/quote]
+
+Normalement vous devez tomber sur un formulaire de connexion, comme celui-ci :
+
+[center][img]http://i.imgur.com/99upzh3.png[/img][/center]
+
+[quote]Par défaut les identifiants sont : [b]admin[/b] et [b]12345[/b][/quote]
+
+Une fois connecté à l'interface d'administration, vous devez ajouter un nouveau domaine. Dans le menu de gauche cliquez sur [b]Domains[/b] puis sur [b]+ Add Domain[/b]. Une nouvelle fenêtre s'ouvre et vous demande de configurer IMAP et SMTP pour ce domaine. C'est exactement la même chose qu'avec Thunderbird, on utilise tous ce qu'on a fait jusqu'à présent.
+
+Voici un exemple de configuration, adaptez selon vos besoins :
+
+[center][img]http://i.imgur.com/Watsplw.png[/img][/center]
+
+Une fois les champs remplis, cliquez sur le bouton "[b]Test Connection[/b]" pour voir si vous n'avez pas fait d'erreur de saisie. N'hésitez pas à lancer en même temps la commande [b]tail[/b] si vous avez des problèmes de connexion :
+
+[code]tail -f /var/log/mail.log[/code]
+
+Ajoutez tous les utilisateurs autorisés à se connecter dans le White List (bouton en bas), par exemple pour [b]super.admin@domain.tld[/b] et [b]contact@domain.tld[/b] vous devez mettre (les utilisateurs sont séparés par des espaces) :
+
+[quote]super.admin contact[/quote]
+
+Allez voir les autres sections de l'espace d'administration, il reste encore pleins de choses à personnaliser à votre guise.
+
+[h]Connexion à votre boîte mail[/h]
+
+Connectez-vous à votre boîte mail via le formulaire principal :
+
+[quote]
+[url]http://webmail.domain.tld/[/url]
+[/quote]
+
+[center][img]http://i.imgur.com/168tuM4.png[/img][/center]
+
+Saisissez les identifiants que vous avez mis lors de la création de votre adresse email via PostfixAdmin et connectez-vous. Si tout se passe bien, vous arrivez dans votre boîte mail. Rainloop s'occupe de son côté d'aller chercher et d'organiser tous vos emails depuis le serveur avec le protocol IMAP :
+
+[center][img]http://i.imgur.com/3mMkmZu.png[/img][/center]
+
+L'envoie des emails est le gros point fort de Rainloop car il gère le [b]Drag&Drop[/b], l'auto-complétion et les raccoucis claviers :
+
+[center][img]http://i.imgur.com/yIsu595.png[/img][/center]
+
+[h]15 - Installation et configuration de SpamAssassin[/h]
+
+[center][img]http://i.imgur.com/dbUBDsr.png[/img][/center]
+
+SpamAssassin est un logiciel libre permettant de filtrer les emails afin d'éradiquer au maximum le SPAM. Il fait passer un certain nombre de tests au message et en fonction du résultat de ces tests, il attribue un score qui permettra de savoir si il s'agit d'un email indésirable ou non.
+
+[quote]Liens utiles :
+[url=http://spamassassin.apache.org/]http://spamassassin.apache.org/[/url]
+[url=http://fr.wikipedia.org/wiki/SpamAssassin]http://fr.wikipedia.org/wiki/SpamAssassin[/url][/quote]
+
+On commence par installer SpamAssassin :
+
+[code]apt-get install spamassassin spamc[/code]
+
+Ensuite on modifie le fichier de configuration de Postfix [b]/etc/postfix/master.cf[/b] :
+
+[code]
+smtp      inet  n       -       -       -       -       smtpd
+   -o content_filter=spamassassin
+submission inet n       -       -       -       -       smtpd
+   -o content_filter=spamassassin
+[/code]
+
+Ajoutez aussi ces deux lignes à la fin du fichier :
+
+[code]
+spamassassin unix -     n       n       -       -       pipe
+  user=debian-spamd argv=/usr/bin/spamc -f -e /usr/sbin/sendmail -oi -f ${sender} ${recipient}
+[/code]
+
+Ok maintenant on relance postfix avec la commande suivante :
+
+[code]service postfix reload[/code]
+
+Dans le fichier [b]/etc/spamassassin/local.cf[/b], décommenter la ligne suivante :
+
+[code]rewrite_header Subject *****SPAM*****[/code]
+
+Les mails considérés comme du SPAM auront un sujet préfixé avec [b]*****SPAM*****[/b]. Ils pourront ainsi être traités comme vous le souhaitez en paramétrant un filtre dans votre client mail. 
+
+Ajouter aussi à la fin du fichier local.cf : 
+
+[code]
+report_safe 0
+whitelist_from *@domain.tld
+
+add_header all Report _REPORT_
+add_header spam Flag _YESNOCAPS_
+add_header all Status _YESNO_, score=_SCORE_ required=_REQD_ tests=_TESTS_ autolearn=_AUTOLEARN_ version=_VERSION_
+add_header all Level _STARS(*)_
+add_header all Checker-Version SpamAssassin _VERSION_ (_SUBVERSION_) on _HOSTNAME_
+[/code]
+
+Pour avoir un rapport détaillé dans les headers de tous les mails, comme ceci :
+
+[code]
+X-Spam-Report: 
+	* -5.0 RCVD_IN_DNSWL_HI RBL: Sender listed at http://www.dnswl.org/, high
+	*      trust
+	*      [66.45.63.27 listed in list.dnswl.org]
+	* -3.0 RCVD_IN_RP_CERTIFIED RBL: Sender in ReturnPath Certified - Contact
+	*      cert-sa@returnpath.net
+	*      [Return Path SenderScore Certified {formerly]
+	[Bonded Sender} - <http://www.senderscorecertified.com>]
+	* -2.0 RCVD_IN_RP_SAFE RBL: Sender in ReturnPath Safe - Contact
+	*      safe-sa@returnpath.net
+	*      [Return Path SenderScore Safe List (formerly]
+	[Habeas Safelist) - <http://www.senderscorecertified.com>]
+X-Spam-Status: No, score=-10.0 required=5.0 tests=RCVD_IN_DNSWL_HI,
+	RCVD_IN_RP_CERTIFIED,RCVD_IN_RP_SAFE autolearn=ham
+	version=3.3.2
+X-Spam-Level: 
+X-Spam-Checker-Version: SpamAssassin 3.3.2 (2011-06-06) on hostname.domain.tld[/code]
+
+L'exemple ci-dessus montre un très bon élève (returnpath.net) mais ça sera pas toujours le cas avec les mails que vous recevrez :D
+
+Dans le fichier [b]/etc/default/spamassassin[/b], modifier ces deux lignes :
+
+[code]
+ENABLED=1
+CRON=1 # Debian <= 7 "Wheezy"
+CRON=0 # Debian >= 8 "Jessie"
+[/code]
+
+On active le service lors du boot puis on le démarre :
+
+[code]
+# Debian 7
+update-rc.d spamassassin defaults
+
+# Debian 8
+systemctl enable spamassassin.service
+
+service spamassassin start
+[/code]
+
+Pour finir, ajouter au cron ces 3 lignes avec contab :
+
+[code]
+# crontab -e
+[/code]
+
+[code]
+# Mise à jour des règles de spamassassin
+20 02 * * * /usr/bin/sa-update
+
+# Auto-apprentissage de spam assassin
+30 02 * * * /usr/bin/sa-learn --ham /var/mail/vhosts/domain.tld/utilisateur/mail/cur/*
+40 02 * * * /usr/bin/sa-learn --spam /var/mail/vhosts/domain.tld/utilisateur/mail/.Junk/cur/*
+[/code]
+
+Spamassassin est très intelligent, il peut apprendre tout seul au fur et à mesure que vous recevez des mails, lorsque vous ajoutez manuellement un mail dans le dossier spam (ce qui veut dire qu'il ne l'avait pas détecté en tant que tel), sa-learn --spam permet de mettre à jour le filtrage bayésien ([url]http://fr.wikipedia.org/wiki/Filtrage_bay%C3%A9sien_du_spam[/url]) en analysant les mails contenus dans le dossier spam, donc Spamassassin s'améliore un peu chaque jour en fonction de vous, si c'est pas cool ça :lol:
+
+Le contraire est aussi possible avec l'option --ham de la commande sa-learn, si Spamassassin considère un mail en tant que spam alors que ce n'est pas le cas (faux positif), vous pouvez lui indiquer en remettant le mail dans le dossier principal de réception (INBOX).
+
+[h]16 - Filtrer les mails Sieve et Sieve-Manager[/h]
+
+Vous connaissez très certainement les filtres côté clients, tout bon client mail possède un système de filtre permettant de trier automatiquement les mails en fonction de différents critères que vous pouvez définir. Sieve c'est exactement la même chose mais côté serveur, il possède un langage de script pour définir soit même l'ensemble des règles. 
+
+Pour installer sieve, exécuter la commande suivante :
+
+[code]apt-get install dovecot-sieve dovecot-managesieved[/code]
+
+Éditer le fichier principal de configuration de Dovecot et ajouter "[b]sieve[/b]" dans la liste des protocoles :
+
+[code]
+# /etc/dovecot/dovecot.conf
+
+protocols = imap lmtp sieve
+[/code]
+
+Ensuite dans le fichier [b]/etc/dovecot/conf.d/20-lmtp.conf[/b], ajouter le contenu suivant :
+
+[code]
+protocol lmtp {
+  postmaster_address = postmaster@domain.tld
+  mail_plugins = $mail_plugins sieve
+}
+[/code]
+
+Dans le fichier [b]/etc/dovecot/conf.d/90-sieve.conf[/b], modifier la configuration du plugin :
+
+[code]
+plugin {
+
+    sieve = /var/mail/vhosts/%d/%n/.dovecot.sieve
+    sieve_default = /var/mail/sieve/default.sieve
+    sieve_dir = /var/mail/vhosts/%d/%n/sieve
+    sieve_global_dir = /var/mail/sieve
+
+}
+[/code]
+
+Puis :
+
+[code]
+mkdir /var/mail/sieve/
+touch /var/mail/sieve/default.sieve && chown -R vmail:vmail /var/mail/sieve
+[/code]
+
+Par défaut, vous pouvez mettre toutes les règles dans le fichier [b]default.sieve[/b], elles s'appliqueront à toutes les adresses, les règles spécifiques à une adresse doivent être mises dans le fichier [b]/var/mail/vhosts/domain.tld/adresse/.dovecot.sieve[/b]. [color=#ff0000][b]Attention si ce fichier existe, le fichier par défaut (default.sieve) ne sera pas lu pour l'utilisateur courant.[/b][/color]
+
+Pour ce tutoriel, on va ajouter une règle basique mais très utile :
+
+[code]
+require ["fileinto"];
+ 
+if header :contains "Subject" "*****SPAM*****" {
+
+    fileinto "Junk";
+
+}
+[/code]
+
+Je pense que c'est assez explicite pour comprendre le but de cette règle ;)
+Et pour finir compiler les règles avec la commande sievec :
+
+[code]sievec /var/mail/sieve/default.sieve[/code]
+
+et on redémarre Dovecot :
+
+[code]service dovecot restart[/code]
+
+Vous pouvez tester la règle en envoyant un email depuis un autre fournisseur de mail avec le contenu suivant : 
+
+[code]XJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X[/code]
+
+Si tout fonctionne bien vous devriez recevoir le mail automatiquement dans le dossier Spam (Junk). N'hésitez pas à aller voir la documentation, pour créer d'autres règles. L'avantage de ce système c'est que les règles sont côté serveur donc elles s'appliquent à tous vos clients mail, pas besoin de les refaire lorsque vous changez de client.
+
+[quote]Liens utiles :
+[url]http://wiki2.dovecot.org/Pigeonhole/Sieve[/url]
+[url]http://wiki2.dovecot.org/Pigeonhole/Sieve/Examples[/url]
+[/quote]
+
+Rainloop intègre le support de Sieve directement depuis le webmail, nous allons avoir comment activer cette fonctionnalité. Connectez-vous avec votre compte administrateur à rainloop puis aller dans Domains > cliquez sur votre domaine puis sur Sieve configuration et enfin configurer comme sur l'image suivante :
+
+[center][img]http://i.imgur.com/0NB2K9Q.png[/img][/center]
+
+Cliquer sur le bouton "Test" pour tester la connexion avec SieveManager, si c'est bon, le titre de la section sera vert.
+Maintenant il faut se connecter à un compte utilisateur, aller dans les paramètres > Filtres. Vous pouvez dès à présent configurer vos filtres depuis cette interface.
+
+[center][url=http://i.gyazo.com/150e7e5ba9f407f28b29322553fce98b.png][img]http://i.gyazo.com/150e7e5ba9f407f28b29322553fce98b.png[/img][/url][/center]
+
+Il existe aussi un plugin similaire pour Thunderbird ici : [url]https://addons.mozilla.org/fr/thunderbird/addon/sieve/[/url]
+
+[h]17 - Installation et configuration de ClamAV[/h]
+
+[center][img]http://i.imgur.com/8BOeYvu.png[/img][/center]
+
+ClamAV est un antivirus destiné aux systèmes UNIX principalement. Il est capable de détecter en temps réel des logiciels malveillants et des virus grâce à une base de détection de plus de 3 500 000 signatures. ClamAV est généralement utilisé avec Postfix pour filtrer les emails comportant des virus, malwares...etc
+
+[quote]Liens utiles :
+[url=http://www.clamav.net/index.html]http://www.clamav.net/index.html[/url]
+[url=https://github.com/vrtadmin/clamav-faq/raw/master/manual/clamdoc.pdf]https://github.com/vrtadmin/clamav-faq/raw/master/manual/clamdoc.pdf[/url]
+[url=http://fr.wikipedia.org/wiki/ClamAV]http://fr.wikipedia.org/wiki/ClamAV[/url]
+[/quote]
+
+Installer le paquet [b]clamav-milter[/b] depuis les dépôts officiels de Debian :
+
+[code]apt-get install clamav-milter[/code]
+
+[b]4[/b] autres paquets seront installés en même temps :
+
+[quote]
+- [b]clamav[/b] : C'est le paquet principal
+- [b]clamav-base[/b] : C'est le paquet de base de ClamAV, contient divers outils pour son fonctionnement
+- [b]clamav-daemon[/b] : Permet de faire tourner ClamAV en tâche de fond
+- [b]clamav-freshclam[/b] : Outil permettant de mettre à jour la base de signature des virus
+[/quote]
+
+Une fois que tous les paquets sont installés, il faut mettre à jour la base de signature avec [b]freshclam[/b] :
+
+[code]
+freshclam
+
+# ClamAV update process started at Sat Sep 13 23:42:44 2014
+# main.cvd is up to date (version: 55, sigs: 2424225, f-level: 60, builder: neo)
+# daily.cvd is up to date (version: 19360, sigs: 1098967, f-level: 63, builder: dgoddard)
+# bytecode.cvd is up to date (version: 242, sigs: 46, f-level: 63, builder: dgoddard)
+[/code]
+
+Ensuite on démarre le daemon : 
+
+[code]
+service clamav-daemon start
+
+[ ok ] Starting ClamAV daemon: clamd.
+[/code]
+
+On créer le répertoire qui contiendra le socket UNIX et on définit [b]clamav[/b] en tant que propriétaire :
+
+[code]
+mkdir /var/spool/postfix/clamav
+chown clamav /var/spool/postfix/clamav
+[/code]
+
+Exécuter la commande suivante pour configurer clamav-milter :
+
+[code]dpkg-reconfigure clamav-milter[/code]
+
+Repondez aux questions avec les réponses ci-dessous :
+
+[quote]
+Handle configuration automatically --> [b]yes[/b]
+User for daemon --> [b]clamav[/b]
+Additional groups --> [b]laisser le champ vide[/b]
+path to socket --> [b]/var/spool/postfix/clamav/clamav-milter.ctl[/b]
+group owner for the socket --> [b]clamav[/b]
+permissions (mode) for socket --> [b]666[/b]
+remove stale socket --> [b]yes[/b]
+wait timeout for clamd --> [b]120[/b]
+foreground --> [b]no[/b]
+chroot --> [b]laisser le champ vide[/b]
+pid file --> [b]/var/run/clamav/clamav-milter.pid[/b]
+temporary path --> [b]/tmp[/b]
+clamd socket --> [b]unix:/var/run/clamav/clamd.ctl[/b]
+hosts excluded for scanning --> [b]laisser le champ vide[/b]
+mail whitelist --> [b]laisser le champ vide[/b]
+action for "infected" mail --> [b]reject[/b]
+action on error --> [b]defer[/b]
+reason for rejection --> [b]Rejecting harmful e-mail: %v found.[/b]
+headers -> [b]replace[/b]
+log file --> [b]/var/log/clamav/clamav-milter.log[/b]
+disable log file locking --> [b]no[/b]
+maximum log file size --> [b]50[/b]
+log time --> [b]yes[/b]
+use syslog --> [b]no[/b]
+log facility (type of syslog message) --> [b]LOG_LOCAL6[/b]
+verbose logging --> [b]no[/b]
+log level when infected --> [b]off[/b]
+log level when no threat --> [b]off[/b]
+size limit for scanned messages  --> [b]25[/b]
+support multiple recipients --> [b]no[/b]
+enable log rotation --> [b]yes[/b]
+[/quote]
+
+Après la re-configuration, [b]clamav-milter[/b] devrait redémarrer pour prendre en compte les modifications :
+
+[code]
+[ ok ] Stopping Sendmail milter plugin for ClamAV: clamav-milter.
+[ ok ] Starting Sendmail milter plugin for ClamAV: clamav-milter.
+[/code]
+
+Par défaut, freshclam récupère les dernières mises à jour depuis le serveur principal [b]database.clamav.net[/b], on peut spécifier d'autres serveurs, plus proches, par exemple : [b]db.fr.clamav.net[/b]
+
+Dans le fichier [b]/etc/clamav/freshclam.conf[/b], ajouter la ligne suivante au-dessus des autres serveurs "[b]DatabaseMirror[/b]" :
+
+[code]DatabaseMirror db.fr.clamav.net[/code]
+
+Ensuite, ajoutez une nouvelle tâche CRON pour mettre à jour la base de signature automatiquement toutes les heures
+
+[code]
+# crontab -e
+
+15 * * * * /usr/bin/freshclam --quiet
+[/code]
+
+On redémarre le daemon pour prendre en compte les modifications :
+
+[code]service clamav-daemon restart[/code]
+
+Il ne reste plus qu'à dire à Postfix où se trouve le socket UNIX de clamav dans le fichier /etc/postfix/main.cf :
+
+[code]smtpd_milters = inet:localhost:12301 unix:/clamav/clamav-milter.ctl[/code]
+
+Recharger la configuration de Postfix :
+
+[code]service postfix reload[/code]
+
+--------------------------------------------------------------------------------------------------------------
+
+[quote][center][b][url=http://mondedie.fr/viewtopic.php?pid=11270]Si vous avez une question, une remarque ou une suggestion, c'est par ici[/url][/b][/center][/quote]
