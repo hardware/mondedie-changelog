@@ -1,0 +1,573 @@
+[center][b]Mettre en place un serveur DNS avec Bind9 et DNSSEC[/b][/center]
+
+[center][img]http://i.imgur.com/1BZDyAb.png[/img][/center]
+
+[h]Installation de Bind[/h]
+
+[code]apt-get install bind9 dnsutils[/code]
+
+Les fichiers de configuration sont placés dans le répertoire [b]/etc/bind[/b].
+
+Voici la liste des fichiers principaux :
+
+[quote]- [b]named.conf.local[/b] : Configuration local du serveur DNS, on y déclare les zones associées au domaine. 
+- [b]named.conf.options[/b] : Ce fichier contient l'ensemble des options de configuration du serveur DNS. 
+- [b]named.conf.default-zones[/b] : Ce fichier contient des zones pré-définies[/quote]
+
+[h]Configuration de bind[/h]
+
+Dans ce tutoriel, nous allons détailler la configuration d'un serveur DNS primaire (votre serveur) et deux serveurs DNS secondaires (celui de votre registrar et celui de votre hébergeur par exemple) au cas où le primaire ne réponde plus aux requêtes DNS.
+
+[quote][color=#ff5454]Attention[/color] : Dans la suite du tutoriel, n'oubliez pas de remplacer [b]domain.tld[/b] par votre nom domaine[/quote]
+
+[quote]
+Liste des serveurs DNS :
+---------------------------------------
+[b]Serveur primaire (votre serveur) :[/b]
+ns1.domain.tld / xxx.xxx.xxx.xxx
+[b]Serveurs secondaires :[/b]
+ns6.gandi.net / [color=#63bd1e]217.70.177.40[/color]
+ns.kimsufi.com / [color=#63bd1e]213.186.33.199[/color]
+[/quote]
+
+Fichier de configuration principal :
+
+[code]
+# vim /etc/bind/named.conf.options
+
+options {
+    directory "/var/cache/bind";
+
+    # Activer DNSSEC
+    dnssec-enable yes;
+    dnssec-validation auto;
+    auth-nxdomain no; # RFC1035
+
+    listen-on { any; };
+    listen-on-v6 { any; };
+
+    # Autoriser les requêtes récursives locales uniquement
+    allow-recursion { 127.0.0.1; ::1; };
+
+    # Ne pas transférer les informations des zones aux DNS secondaires
+    allow-transfer { none; };
+
+    # Ne pas autoriser la mise à jour des zones maîtres
+    allow-update { none; };
+};
+[/code]
+
+Fichier de configuration local du serveur DNS, on va déclarer la zone associée au domaine. 
+
+[code]
+# vim /etc/bind/named.conf.local
+
+zone "domain.tld" IN {
+
+        # Zone de type maître
+        type master;
+
+        # Fichier de zone
+        file "/etc/bind/domain.tld/db.domain.tld";
+
+        # On autorise le transfert de la zone aux serveurs DNS secondaires
+        allow-transfer { 217.70.177.40; 213.186.33.199; 127.0.0.1; ::1; };
+
+        # On autorise tout le monde à envoyer des requêtes vers cette zone
+        allow-query { any; };
+
+        # Prévenir les serveurs DNS secondaires qu'un changement a été effectué dans la zone maître
+        notify yes;
+};
+[/code]
+
+La directive [b]zone[/b] détermine la zone à gérer.
+
+La directive [b]type[/b] peut prendre deux valeurs, [b]master[/b] ou [b]slave[/b]. Le serveur primaire sera toujours de type [b]master[/b]. Les serveurs secondaires seront quant à eux de type [b]slave[/b] et iront récupérer les informations de la zone depuis le serveur primaire grâce à la directive [b]allow-transfer[/b].
+
+Créer un nouveau répertoire qui contiendra les fichiers de configuration liés à votre domaine :
+
+[code]mkdir /etc/bind/domain.tld[/code]
+
+[h]Configuration du fichier de zone :[/h]
+
+Cette partie du tutoriel est très importante, on va définir le fichier de zone principal de votre domaine et ajouter les enregistrements nécessaires au bon fonctionnement de votre nom de domaine.
+
+[center][b]/etc/bind/domain.tld/db.domain.tld[/b][/center]
+
+[code]
+# vim /etc/bind/domain.tld/db.domain.tld
+
+; ZONE : domain.tld
+; ------------------------------------------------------------------
+$TTL 7200
+
+@       IN      SOA    ns1.domain.tld. hostmaster.domain.tld. (
+                                        2014102001 ; Serial
+                                        7200       ; Refresh
+                                        1800       ; Retry
+                                        1209600    ; Expire - 1 week
+                                        86400 )    ; Minimum
+
+; NAMESERVERS
+
+@                   IN                NS                   ns1.domain.tld.
+@                   IN                NS                   ns6.gandi.net.
+@                   IN                NS                   ns.kimsufi.com.
+[/code]
+
+[quote][b]$TTL[/b] : (Time To Live) exprime la durée (en secondes) de validité des informations contenues dans votre fichier de zone. Une fois ce délai expiré, les autres serveurs DNS doivent vérifier à nouveau les enregistrements.
+
+[b]SOA[/b] : permet de définir les informations relatives à la zone. En l'occurrence le nom du serveur DNS primaire et l'adresse mail du contact technique (hostmaster.domain.tld. le symbole [b]@[/b] est remplace par un point). Cet enregistrement est composé de plusieurs champs :
+
+- [b]Serial[/b] : est un entier non signé de 32 bits. C'est le numéro de série à incrémenter à chaque modification du fichier. Cela permet aux serveurs secondaires de savoir si une modification a été apportée au fichier de zone principal. Le serial est généralement formaté à partir de la date de modification de la zone, AAAAMMDDXX, par exemple pour le 10 octobre 2014 => 2014102001 (première modification), 2014102002 (deuxième modification), ... etc.
+
+- [b]Refresh[/b] : définit la période de rafraîchissement des données.
+
+- [b]Retry[/b] : si une erreur survient au cours du dernier rafraîchissement, celle-ci sera répétée au bout du délai Retry.
+
+- [b]Expire[/b] : le serveur sera considéré comme non disponible au bout du délai Expire.
+
+- [b]Negative cache TTL[/b] : définit la durée de vie d'une réponse NXDOMAIN de notre part.[/quote]
+
+Après c'est à vous de personnaliser ce fichier en fonction de vos besoins, voici un exemple :
+
+[code]
+; Enregistrements A/AAAA
+
+@                   IN                A                    IPv4 de votre serveur
+@                   IN                AAAA                 IPv6 de votre serveur
+
+hostname            IN                A                    IPv4 de votre serveur
+hostname            IN                AAAA                 IPv6 de votre serveur
+
+ns1                 IN                A                    IPv4 de votre serveur
+ns1                 IN                AAAA                 IPv6 de votre serveur
+
+; Sous-domaines - Serveur web
+www                 IN                CNAME                hostname
+blog                IN                CNAME                hostname
+forum               IN                CNAME                hostname
+...
+
+; Sous-domaines - Serveur mail
+smtp                IN                CNAME                hostname2
+imap                IN                CNAME                hostname2
+pop                 IN                CNAME                hostname2
+...
+
+; Sous-domaines - Seedbox
+plex                IN                CNAME                hostname3
+torrent             IN                CNAME                hostname3
+...
+
+; Enregistrement MX (Mail Exchanger)
+
+@                   IN                MX          10       mail.domain.tld.
+
+; Enregistrement SFP, DKIM, ...etc
+
+...
+[/code]
+
+[h]Modification du fichier resolv.conf[/h]
+
+Ajouter la ligne suivante dans le fichier [b]/etc/resolv.conf[/b] :
+
+[code]nameserver 127.0.0.1[/code]
+
+[h]Vérification des fichiers de configuration :[/h]
+
+Avant de démarrer le service, il faut vérifier la syntaxe des fichiers de configuration de Bind :
+
+[code]
+# named-checkconf -z
+
+zone domain.tld/IN: loaded serial 2014102001
+zone localhost/IN: loaded serial 2
+zone 127.in-addr.arpa/IN: loaded serial 1
+zone 0.in-addr.arpa/IN: loaded serial 1
+zone 255.in-addr.arpa/IN: loaded serial 1
+[/code]
+
+On va aussi vérifier la validité du fichier de zone :
+
+[code]
+# named-checkzone domain.tld /etc/bind/domain.tld/db.domain.tld
+
+zone domain.tld/IN: loaded serial 2014102001
+OK
+[/code]
+
+On peut maintenant démarrer le service :
+
+[code]service bind9 start[/code]
+
+[quote][b]À chaque modification du fichier de zone, le serial doit être incrémenté et le serveur DNS être redémarré pour que les modifications soient prises en compte.[/b][/quote]
+
+[h]Déclaration des serveurs de nom[/h]
+
+N'oubliez pas de déclarer les serveurs de nom associés à votre nom de domaine à partir de l'interface de votre registrar (OVH, gandi, godaddy...etc), par exemple chez gandi :
+
+[img]http://i.imgur.com/vaIpyun.png[/img]
+
+[h]Mise en place du serveur DNS secondaire de votre hébergeur[/h]
+
+Exemple chez Kimsufi/SYS :
+
+[img]http://i.imgur.com/4PzRZIn.png[/img]
+
+OVH s'assure que vous êtes bien le propriétaire de la zone en vous demandant d'ajouter un enregistrement de type TXT :
+
+[code]
+# vim /etc/bind/domain.tld/db.domain.tld
+
+ownercheck           IN              TXT             "be236ffd"
+[/code]
+
+N'oubliez pas d'incrémenter le sérial et de redémarrer Bind pour que la modification soit prise en compte. Attendez quelques secondes, le temps que l'information se propage (dans ce cas là, le temps de propagation est quasi instantané) au niveau des serveurs DNS d'OVH puis cliquer sur [b]Confirmer[/b].
+
+[h]Modification des Glues records[/h]
+
+Quand un domaine est délégué à un serveur de nom qui appartient à ce sous-domaine (par exemple, dans notre cas il s'agit de [b]ns1.domain.tld[/b]), il est nécessaire de fournir également l'adresse IP de ce serveur pour éviter les références circulaires.
+
+[quote]Chez gandi :
+[url]http://wiki.gandi.net/fr/domains/management/change-glue[/url][/quote]
+
+[img]http://i.imgur.com/N4Ownvw.png[/img]
+
+[h]Sécurisation du serveur DNS avec DNSSEC[/h]
+
+DNSSEC permet de signer cryptographiquement chaque enregistrement présent au sein de votre fichier de zone afin de ne pas être vulnérable aux attaques MITM ou DNS cache poisoning (Empoisonnement du cache DNS). 
+
+Regardez cet article d'OVH pour comprendre le fonctionnement de DNSSEC simplement : 
+[url]https://www.ovh.com/fr/domaines/service_dnssec.xml[/url]
+
+Pour comprendre le mécanisme un peu plus en détail, vous pouvez lire la section suivante :
+
+[h]Comment ça marche ?[/h]
+
+Je vous conseille vivement de lire cette section, j'explique brièvement le fonctionnement de DNSSEC, je pense que c'est important de comprendre le mécanisme avant de le configurer. Sinon vous pouvez aller directement à l'étape suivante.
+
+Je vais prendre mon nom de domaine (meshup.net) pour l'exemple. Imaginez un serveur DNS qui n'est pas sécurisé avec DNSSEC, demandez lui ses serveurs de nom :
+
+[code]
+# dig +short NS meshup.net
+
+ns1.meshup.net.
+ns6.gandi.net.
+ns.kimsufi.com.
+[/code]
+
+En réponse, il vous retourne la liste des serveurs de nom contenue dans le fichier de zone. Avec un serveur sécurisé avec DNSSEC, il vous retourne en plus la signature des enregistrements NS :
+
+[code]
+# dig +short +dnssec NS meshup.net
+
+ns1.meshup.net.
+ns6.gandi.net.
+ns.kimsufi.com.
+
+NS 8 2 7200 20141114161733 20141015161733 55473 meshup.net. DRLeUM8H0X0x3/66QYGPR+ng0ySee7M4VrsdJYiAZFSzdZQDTlB13n0n HajqOBTvV
+ZF/2M6X2QnU25sSQJxTbxKUKAbtWJUk40VtF9/QCpCMYz6K hVMo/0TNmMlSjOI61Ywro4+kl2TJEkqN/1XZEm2ucmSfnMv7FfXIzVWs w99zlAiK/6cOPGrf7ZeZE
+baUioZjV0aJE8DqORS0wjFw2ZFKoc6XuzAL yB84ZgXyQRTbKK+T34ZwCAXZwtsXnL6UVs2g4Tah8TMEkePII1wXykJT TpEPSvQBqt8X6yiCyKTum9WexSgPkha+Y
+i5xvb0RSclonWpMSbWqkz+P +FTUbw==
+[/code]
+
+Dans une zone signée avec DNSSEC, chaque enregistrement (RRSET) est associé avec un autre enregistrement de type RRSIG contenant une signature générée avec la clé privée correspondante.
+
+Afin de vérifier cryptographiquement que la signature est valide, le résolveur a besoin de la clé publique (DNSKEY) :
+
+[code]
+# dig +short DNSKEY meshup.net
+
+256 3 8 AwEAAcWNbmDidZrzYTO+bmlAdr870/rI4PcHk3ECk/geisQ9Xaw3LlCZ 
+        zOEGeyTMurOQac9gGUrKLxpMR6K8MJHK9pn4e91VWoulWKa1Ouf3+weL 
+        t1gqUfhgeDy8ezhK3oeZ0cfWDbAdVJdCN8mQKRvoIkEF/+kpvc0/dzdv 
+        V5pms+s5wOdZSrDakYHHvQ4889VBizceixR3+TAaKF2hycrk0Vx8yUCV 
+        jW9RSZEOsKM4wiaqwhxtu9xGVJtw2jTXNQRL+2NaMyas3ZeSv8oNqE9p 
+        AT+eqNpQO8VDHwSzcJpjZGEjz8aqyI1MR6ez+uHh1Kuhz39AVP/3d3uQ 
+        nLCeecO/+cU=
+
+257 3 8 AwEAAZTt+fZFx/qU1TTf3I6kTd8XmJXbP8VrOxlv7pZvwAlLtAeE98HD 
+        8s/9TXls+hwmX/aSDVGWBJTPkbcSQF7ayoBynns8BvtXtf5s+5RMWNay 
+        Hs40qMoyDkROBFOAFndNTViyaKJwFKsP+MGHzTRb1vtEOUlBcEvVR7Ed 
+        Dm20uDbJ+TnfNy6Hoan0Inpj+AZD1yW6Mg8c4rKCaURyb5+J8wHQ+HAV 
+        O0wQmOiPP1krTXWHh9VaB6piKT/kgWLtP7fmhazTGIakvBEm4na52Sta 
+        t3luXbBMYOyJNGMhZEEqiV6sDI6e7yv4+SRqDtQCfXCcbpfZMrW8NDqb 
+        /8P61/NAlnk=
+[/code]
+
+Bon ok, maintenant le resolveur possède nos enregistrement NS, leurs signatures, la clé publique correspondante à la clé privée qui a été utilisée pour signer les enregistrements. Il peut maintenant vérifier leur validité sans soucis. Mais comment s'assurer de l'authenticité de la clé publique et de la signature ? Un attaquant peut très bien spoofer un enregistrement DNS puis modifier la clé publique et la signature en même temps. L'élement qui va nous permettre d'éviter ce genre de scénario s'appelle le FINGERPRINT, c'est une chaine de caractère qui permet d'identifier de manière [b]unique[/b] la clé publique, elle est stockée dans la zone parent grâce à un enregistrement DS (Delegation Signer). Dans le cas de mon domaine (meshup.[b]net[/b]), cet enregistrement se trouve dans la zone du domaine "[b]net[/b]" :
+[code]
+dig +short DS meshup.net     
+
+KEYTAG    Algorithme   condensât (ou FINGERPRINT)
+---------------------------------------------------------------------------------------
+26329     8 2          97E570B2F73C8E31605B92496E02A6C4B680F8BF0C65C0530A735A757242FAE0[/code]
+
+Il faut bien avoir compris que cet enregistrement n'est pas dans notre fichier de zone, c'est primordial. Il sera toujours stocké dans la zone du domaine parent.
+
+[quote]Oui mais comment peut-on s'assurer que cet enregistrement n'a pas lui aussi été compromit par un attaquant ?[/quote]
+
+Parce que la zone "[b]net[/b]" possède aussi un enregistrement DNSKEY et a signé chacun de ses enregistrements avec une clé privée en mettant le résultat de la signature dans un champ RRSIG. 
+
+[quote]Ok très bien mais comment peut-on s'assurer de la validité de la clé publique (DNSKEY) et des signatures de la zone "net" ?[/quote]
+
+Parce que la zone root "[b].[/b]" possède aussi un enregistrement DS contenant le fingerprint de la clé publique, ainsi qu'un enregistrement DNSKEY et RRSIG de la même manière que pour la zone "net".
+
+[quote]Oui mais comment peut-on être sûr et certain que la zone [b]root[/b] n'a pas été compromise elle aussi ?[/quote]
+
+Tous simplement parce que chaque serveur DNS possède la clé publique de la zone root ([b].[/b]) dans le fichier [b]/etc/bind/bind.keys[/b] :
+
+[code]
+managed-keys {
+    # ROOT KEY: See https://data.iana.org/root-anchors/root-anchors.xml
+    # for current trust anchor information.
+    # NOTE: This key is activated by setting "dnssec-validation auto;"
+    # in named.conf.
+    . initial-key 257 3 8 "AwEAAagAIKlVZrpC6Ia7gEzahOR+9W29euxhJhVVLOyQbSEW0O8gcCjF
+                           FVQUTf6v58fLjwBd0YI0EzrAcQqBGCzh/RStIoO8g0NfnfL2MTJRkxoX
+                           bfDaUeVPQuYEhg37NZWAJQ9VnMVDxP/VHL496M/QZxkjf5/Efucp2gaD
+                           X6RS6CXpoY68LsvPVjR0ZSwzz1apAzvN9dlzEheX7ICJBBtuA6G3LQpz
+                           W5hOA2hzCTMjJPJ8LbqF6dsV6DoBQzgul0sGIcGOYl7OyQdXfZ57relS
+                           Qageu+ipAdTTJ25AsRTAoub8ONGcLmqrAmRLKBP1dfwhYB4N7knNnulq
+                           QxA+Uk1ihz0=";
+};
+[/code]
+
+Vous pouvez retrouver cette clé sur le site de l'ISC (Internet Systems Consortium) ici : [url]http://www.isc.org/downloads/bind/bind-keys/[/url]
+
+Voici un petit schéma qui permet de mieux comprendre la hiérarchie de ce mécanisme :
+
+[img]http://i.imgur.com/k7lFPtQ.png[/img]
+Avant de mettre en place DNSSEC, vous devez vous assurer que votre registrar supporte ce mécanisme. A ma connaissance, OVH et Gandi prennent en charge DNSSEC relativement bien. Il faut aussi que la zone parent de votre domaine supporte DNSSEC, pour le vérifier, il suffit de taper cette commande : 
+
+[code]dig +short DNSKEY fr
+257 3 8 ...
+
+dig +short DNSKEY eu
+256 3 7 ...
+
+dig +short DNSKEY com
+256 3 7 ...
+
+etc...[/code]
+
+[h]Les types de clés[/h]
+
+DNSSEC utilise deux types de clé :
+
+- La clé de signature de la zone ([b]Z[/b]one [b]S[/b]igning [b]K[/b]ey - [b]ZSK[/b])
+- La clé de signature des clés ([b]K[/b]ey [b]S[/b]igning [b]K[/b]eys - [b]KSK[/b])
+
+Ces deux clés peuvent être visualisées avec une commande que l'on a utilisé tout à l'heure :
+
+[code]
+# dig +short DNSKEY meshup.net
+
+# Clé de signature de la zone - ZSK
+----------------------------------------------------------------
+256 3 8 AwEAAcWNbmDidZrzYTO+bmlAdr870/rI4PcHk3ECk/geisQ9Xaw3LlCZ 
+        zOEGeyTMurOQac9gGUrKLxpMR6K8MJHK9pn4e91VWoulWKa1Ouf3+weL 
+        t1gqUfhgeDy8ezhK3oeZ0cfWDbAdVJdCN8mQKRvoIkEF/+kpvc0/dzdv 
+        V5pms+s5wOdZSrDakYHHvQ4889VBizceixR3+TAaKF2hycrk0Vx8yUCV 
+        jW9RSZEOsKM4wiaqwhxtu9xGVJtw2jTXNQRL+2NaMyas3ZeSv8oNqE9p 
+        AT+eqNpQO8VDHwSzcJpjZGEjz8aqyI1MR6ez+uHh1Kuhz39AVP/3d3uQ 
+        nLCeecO/+cU=
+
+# Clé de signature des clés - KSK
+----------------------------------------------------------------
+257 3 8 AwEAAZTt+fZFx/qU1TTf3I6kTd8XmJXbP8VrOxlv7pZvwAlLtAeE98HD 
+        8s/9TXls+hwmX/aSDVGWBJTPkbcSQF7ayoBynns8BvtXtf5s+5RMWNay 
+        Hs40qMoyDkROBFOAFndNTViyaKJwFKsP+MGHzTRb1vtEOUlBcEvVR7Ed 
+        Dm20uDbJ+TnfNy6Hoan0Inpj+AZD1yW6Mg8c4rKCaURyb5+J8wHQ+HAV 
+        O0wQmOiPP1krTXWHh9VaB6piKT/kgWLtP7fmhazTGIakvBEm4na52Sta 
+        t3luXbBMYOyJNGMhZEEqiV6sDI6e7yv4+SRqDtQCfXCcbpfZMrW8NDqb 
+        /8P61/NAlnk=
+[/code]
+
+Le type de la clé est indiqué grâce au premier nombre, les enregistrements commençants par [b]257[/b] indiquent une clé [b]KSK[/b], [b]256[/b] indique une clé [b]ZSK[/b]. On signe la zone avec une clé [b]ZSK[/b] puis on signe la [b]ZSK[/b] avec la clé [b]KSK[/b]. L'enregistrement [b]DS[/b] contenu dans la zone parent correspond au fingerprint de la clé [b]KSK[/b].
+
+Il est actuellement recommandé de changer la ZSK tous les 3 mois et la KSK tous les ans.
+
+[h]Configuration de DNSSEC avec Bind[/h]
+
+Maintenant que vous avez compris le mécanisme, on va le mettre en place avec les outils fournit avec Bind9. Il faut dans un premier temps générer les clés avec [b]dnssec-keygen[/b]. Mais le soucis, c'est que ça prend tu temps, énormement de temps car le système à besoin d'entropie pour pouvoir générer des nombres quasi-aléatoires.
+
+Pour l'aider dans cette tâche, on va installer rng-tools (Hardware Random Generator) :
+
+[code]apt-get install rng-tools[/code]
+
+Editer le fichier [b]/etc/default/rng-tools[/b] et ajouter ces deux lignes :
+
+[code]HRNGDEVICE=/dev/urandom
+RNGDOPTIONS="-W 80% -t 20"[/code]
+
+Puis on lance le service :
+
+[code]/etc/init.d/rng-tools start[/code]
+
+On peut maintenant générer les clés très rapidement, déplacez-vous avant dans le répertoire [b]/etc/bind/domain.tld[/b].
+
+Générer la clé [b]KSK[/b] :
+
+[code]
+# dnssec-keygen -f KSK -a RSASHA256 -b 2048 -n ZONE domain.tld
+
+Generating key pair.......................................................................
+..............+++ ..........................................................+++ 
+Kdomain.tld.+008+62062
+[/code]
+
+Dans notre cas, les clés commencent par [b]Kdomain.tld.+008+62062[/b], pour plus de clarté, on va les renommer :
+
+[code]
+mv Kdomain.tld.+008+62062.key Kdomain.tld.ksk.key 
+mv Kdomain.tld.+008+62062.private Kdomain.tld.ksk.private
+[/code]
+
+Générer la clé [b]ZSK[/b] :
+
+[code]
+# dnssec-keygen -a RSASHA256 -b 2048 -n ZONE domain.tld
+
+Generating key pair.........................................................+++ .+++ 
+Kdomain.tld.+008+32898
+[/code]
+
+On renomme aussi les clés pour plus de clarté :
+
+[code]
+mv Kdomain.tld.+008+32898.key Kdomain.tld.zsk.key 
+mv Kdomain.tld.+008+32898.private Kdomain.tld.zsk.private
+[/code]
+
+Vérifier les permissions sur les clé privées .private ([b]chmod 600[/b]) :
+
+[code]
+# ls /etc/bind/domain.tld
+
+-rw-r--r-- 1 root bind  603 Oct 20 14:45 Kdomain.tld.ksk.key
+-rw-r--r-- 1 root bind  604 Oct 20 14:54 Kdomain.tld.zsk.key
+-rw------- 1 root bind 1776 Oct 20 14:45 Kdomain.tld.ksk.private
+-rw------- 1 root bind 1776 Oct 20 14:54 Kdomain.tld.zsk.private
+[/code]
+
+[h]Importation des clés dans le fichier de zone[/h]
+
+Les fichiers .key contiennent les clés publiques qu'il faut inclure dans le fichier de zone. Pour cela, il faut utiliser la directive $INCLUDE en dessous du champ SOA :
+
+[code]
+@       IN      SOA    domain.tld. hostmaster.domain.tld. (
+                                        2014102003 ; Serial
+                                        7200       ; Refresh
+                                        1800       ; Retry
+                                        604800     ; Expire - 1 week
+                                        86400 )    ; Minimum
+
+$INCLUDE "/etc/bind/domain.tld/Kdomain.tld.zsk.key" ;
+$INCLUDE "/etc/bind/domain.tld/Kdomain.tld.ksk.key" ;
+
+...
+[/code]
+
+[quote][color=#ff0000][b]Il ne faut surtout pas oublier d'incrémenter le serial pour prendre en compte les modifications, c'est très important. Dans mon cas, j'ai mis 2014102003 car c'est la troisième modification que j'ai apporté à ma zone aujourd'hui.[/b][/color][/quote]
+
+[h]Signature du fichier de zone[/h]
+
+Pour signer un fichier de zone, il faut utiliser la commande [b]dnssec-signzone[/b] comme ceci :
+
+[code]
+dnssec-signzone -eYYYYMMDDHHMMSS -t -g -k Kdomain.tld.ksk.key -o domain.tld db.domain.tld Kdomain.tld.zsk.key
+[/code]
+
+[quote][b]-e[/b]YYYYMMDDHHMMSS : Date d'expiration de la zone (obligatoire, par défaut 30 jours)
+[b]-t[/b] : Affiche quelques statistiques lors de la signature de la zone
+[b]-g[/b]: Générer les enregistrements DS (Delegation Signer) 
+[b]-k[/b] : Clé KSK
+[b]-o[/b] : La zone concernée (domain.tld)
+[b]{zonefile}[/b] : Le fichier de zone
+et en dernier paramètre la clé de signature de la zone (ZSK)[/quote]
+
+Cette commande génére une zone entièrement signée nommée : [b]db.domain.tld.signed[/b]
+Modifier le nom du fichier de zone dans le fichier [b]named.conf.local[/b] :
+
+[code]
+# vim /etc/bind/named.conf.local
+
+zone "domain.tld" IN {
+        ...
+        # Fichier de zone
+        file "/etc/bind/domain.tld/db.domain.tld.signed";
+        ...
+};
+[/code]
+
+Et pour finir, relancer Bind :
+
+[code]service bind9 restart[/code]
+
+[h]Configuration de la zone parent[/h]
+
+Il ne reste plus qu'à fournir le condensât (fingerprint) de notre clé [b]KSK[/b] au registrar pour qu'il puisse la rajouter au registre du domaine parent. Chez gandi, c'est très simple. Il suffit d'accéder à l'interface de configuration de votre domaine puis de cliquer sur [b]"Gérer DNSSEC"[/b].
+
+Pour récupérer votre clé publique KSK, exécutez cette commande :
+
+[code]
+tail -n 1 Kdomain.tld.ksk.key
+
+domain.tld. IN DNSKEY 257 3 8 AwEAAbulFobmhae+iYuGQJ7h0RZcVOZE/FL2IcDo6P2cAD0HZaUFPl0k[.........]ba5IEC9gnok=
+[/code]
+
+Puis la donner à votre registrar :
+
+[img]http://i.imgur.com/KLTNbyG.png[/img]
+
+Une fois validé, votre registrar se chargera de générer le condensât, et de le transmettre au registre. Il faut attendre quelques heures pour que les champs DS soient disponibles au niveau de la zone parent.
+
+[h]Maintenir sa zone[/h]
+
+Lors de la modification d'un enregistrement contenu au sein de votre fichier de zone, vous devez [b]IMPERATIVEMENT[/b] :
+
+- Incrémenter le numéro de série de l'enregistrement [b]SOA[/b]
+- Resigner votre zone avec la commande [b]dnssec-signzone[/b]
+- Redémarrer Bind
+
+[b][color=#ff0000]Attention à la validité de votre zone. Lors de sa signature, vous avez spécifié une date d'expiration, pensez toujours à resigner votre zone avant d'arriver à cette date d'expiration sinon votre domaine ne sera plus accessible car il sera considéré comme expiré par les autres serveurs DNS (ça m'est déjà arrivé :o).[/color][/b]
+
+[h]Mettre en place une nouvelle clé ZSK (recommandé : tous les 3 mois)[/h]
+
+Il suffit de suivre les étapes suivantes :
+
+[quote]- Générer une nouvelle clé [b]ZSK[/b]
+- Inclure votre nouvelle clé dans votre fichier de zone
+- Mettre à jour le numéro de série de l'enregistrement [b]SOA[/b]
+- Resigner votre zone
+- Redémarrer Bind[/quote]
+
+[h]Mettre en place une nouvelle clé KSK (recommandé : tous les ans)[/h]
+
+Il suffit de suivre les étapes suivantes :
+
+[quote]- Générer de nouvelles clés [b]KSK[/b] et [b]ZSK[/b]
+- Inclure vos nouvelles clés dans votre fichier de zone
+- Mettre à jour le numéro de série de l'enregistrement [b]SOA[/b]
+- Resigner votre zone
+- Redémarrer Bind
+- Reconfigurer la zone parent avec la nouvelle clé publique[/quote]
+
+
+[h]Vérification du fonctionnement de DNSSEC[/h]
+
+Vous pouvez utiliser ces deux outils pour vérifier la validité de votre domaine :
+
+[url]http://dnssec-debugger.verisignlabs.com/[/url]
+[url]http://dnsviz.net/[/url]
+[img]http://i.imgur.com/2ziwWGR.png[/img]
+
+Si tous les voyants sont au vert c'est que tout est bon :)
+
+--------------------------------------------------------------------------------------------------------------
+
+[quote][center][b][url=http://mondedie.fr/viewtopic.php?pid=13886]Si vous avez une question, une remarque ou une suggestion, c'est par ici[/url][/b][/center][/quote]
