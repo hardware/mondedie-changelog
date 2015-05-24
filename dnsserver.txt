@@ -2,6 +2,12 @@
 
 [center][img]http://i.imgur.com/1BZDyAb.png[/img][/center]
 
+[h]Changelog :[/h]
+
+Un changelog est disponible sur Github pour que vous puissiez suivre les évolutions du tutoriel facilement.
+
+[center]>> [b][url=https://github.com/hardware/mondedie-changelog/commits/master/dnsserver.txt]CHANGELOG[/url][/b] <<[/center]
+
 [h]Installation de Bind[/h]
 
 [code]apt-get install bind9 dnsutils[/code]
