@@ -1553,6 +1553,47 @@ Recharger la configuration de Postfix :
 
 [code]service postfix reload[/code]
 
---------------------------------------------------------------------------------------------------------------
+[h]Bonus - Mise en place de POP3[/h]
+
+En bonus, pour ceux qui souhaitent avoir accès à leurs e-mails via le protocole pop3. Dovecot prend en charge ce protocole mais n'est pas du tout optimisé pour, plus d'info : [url]http://wiki2.dovecot.org/POP3Server[/url] 
+
+1 - Installation du module pop3 de Dovecot
+
+[code]apt-get install dovecot-pop3d[/code]
+
+2 - Dans le fichier [b]/etc/dovecot/dovecot.conf[/b], ajouter le protocole pop3 comme ceci :
+
+[code]protocols = imap pop3 ...[/code]
+
+3 - Dans [b]/etc/dovecot/conf.d/10-master.conf[/b], mettre ça : 
+
+[code]
+service pop3-login {
+
+  inet_listener pop3 {
+    port = 110
+  }
+
+  inet_listener pop3s {
+    port = 995
+    ssl = yes
+  }
+
+} 
+
+service pop3 {
+
+} 
+[/code]
+
+4 - Redémarrage de Dovecot
+
+[code]service dovecot restart[/code]
+
+5 - Vérifier que les ports sont bien en écoute :
+
+[code]
+netstat -ptna | grep -i "0.0.0.0:110\|0.0.0.0:995"
+[/code]
 
 [quote][center][b][url=http://mondedie.fr/viewtopic.php?pid=11270]Si vous avez une question, une remarque ou une suggestion, c'est par ici[/url][/b][/center][/quote]
