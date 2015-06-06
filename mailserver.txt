@@ -1547,7 +1547,7 @@ On redémarre le daemon pour prendre en compte les modifications :
 
 Il ne reste plus qu'à dire à Postfix où se trouve le socket UNIX de clamav dans le fichier /etc/postfix/main.cf :
 
-[code]smtpd_milters = inet:localhost:12301 unix:/clamav/clamav-milter.ctl[/code]
+[code]smtpd_milters = ... unix:/clamav/clamav-milter.ctl[/code]
 
 Recharger la configuration de Postfix :
 
