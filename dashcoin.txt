@@ -1,0 +1,210 @@
+[center][img]http://i.imgur.com/BeOMbDI.png[/img][/center]
+
+[b]Dash[/b] est une crypto-monnaie créé par Evan Duffield. Cette monnaie est basée sur le code libre [b]Bitcoin[/b] dans le but de le rendre plus sûr et d'en augmenter le respect de la vie privée. Contrairement au Bitcoin, qui par nature permet à tout le monde de connaître le solde et les transactions de chaque compte, Dash possède un modèle de transaction cachées, appelé [b]DarkSend[/b], ce qui permet aux utilisateurs d'avoir un plus grand respect de leur vie privée.
+
+Cette crypto-monnaie a été lancée à l'origine sous l'appelation [b]Xcoin[/b], le 18 Janvier 2014, le nom fut changé quelques jours plus tard vers [b]Darkcoin[/b]. Depuis le 25 Mars 2015, le nom a changé de nouveau vers [b]Dash[/b].
+
+[quote][center][color=#ff5d52][b]Attention[/b] : Ce tutoriel demande un minimum de connaissance en matière de cryto-monnaie, si vous n'êtes pas à l'aise avec le sujet, n’hésitez pas à jeter un coup d’œil sur les sites suivants :[/color]
+
+[url]https://bitcoin.org/fr/[/url] - [url]https://fr.wikipedia.org/wiki/Bitcoin[/url] - [url]https://www.weusecoins.com/fr/[/url] - [url]http://www.bitcoin.fr/[/url][/center][/quote]
+
+[b]Mais qu'est-ce que le minage ?[/b]
+
+Le minage vous permet d'obtenir des pièces en échange de la puissance de calcul provenant du CPU/GPU de votre serveur/ordinateur. Cette puissance est utilisée pour valider des blocs de transactions dans la blockchain en calculant un hash par un procédé cryptographique, qui servira également d'identificateur unique du bloc. Ce calcul est rendu extrêmement difficile par l'utilisation d'une [url=https://fr.wikipedia.org/wiki/Preuve_de_travail]preuve de travail[/url], afin de cadencer de manière décentralisée, à un rythme constant et lent (environ 2 minutes), la production des blocs valides. Donc ça veut dire que vous participez activement au fonctionnement du Darkcoin. Ce procédé permet de créer de la monnaie (sonnante et trébuchante ♫♪) soit tout seul (aucun intérêt) soit en [b]pool[/b].
+
+Quand on fait parti d'un pool, chacun calcule un peu dans son coin et met en commun sur un site (une pool). Ensuite, chaque participant reçoit l'équivalent de son taux de participation. Bien sûr il ne s'agit pas de miner quelques heures de temps en temps... Pour que ce soit réellement efficace, il convient de laisser tourner 24/7 et de miner de préférence avec un processeur assez costaud.
+
+[b]Je gagne quoi dans l'histoire ?[/b]
+
+Dans l'absolu pas grand chose même avec un processeur ultra performant, pour un meilleur rendement il faudrait utiliser un ou plusieurs GPU.
+
+En terme de perfomance un Intel Xeon E5-1620 v2 à une vitesse de hashage de l'ordre de [b]~529kh/s[/b] alors qu'un GPU comme la AMD R9 290 OC à une vitesse de [b]~2.5MH/s[/b]. Donc en gros sans matériel spécialisé, on gagne pas grand chose.
+
+[b]Mais alors quel est l'intérêt ??[/b]
+
+Découvrir le fonctionnement des cryto-monnaies, c'est toujours intéressant.
+
+Après il faut suivre un peu les taux de change sur les sites de trading et trouver la monnaie la plus rentable du moment ou les nouvelles qui peuvent être valorisées très rapidement. Par exemple, à la naissance du DarkCoin, on pouvait miner plusieurs DASH en quelques heures avec un simple Intel Core I3, à cette époque ça vallait plusieurs [b]centaines d'€[/b].
+
+Donc vous pouvez vous entraîner au minage avec ce tutoriel puis ensuite à vous de trouver une nouvelle monnaie ou celle qui est la plus rentable en ce moment.
+
+[quote]
+Liens utiles :
+
+- [url]http://dashcoin.net/[/url]
+- [url]https://fr.wikipedia.org/wiki/Darkcoin[/url]
+
+Sites d'échanges :
+
+- [url]https://www.cryptsy.com/[/url]
+- [url]https://poloniex.com/[/url]
+- [url]https://bter.com/[/url]
+[/quote]
+
+[h]Installation de l'outil de minage[/h]
+
+D'abord il faut vérifier la présence des instructions [b]AES-NI[/b] et [b]AVX[/b] nécessaires au fonctionnement du mineur. 
+
+[code]
+cat /proc/cpuinfo | grep aes
+[/code]
+
+Si la commande au-dessus ne retourne rien, vous devez utiliser la version [b]1.2c[/b] de [b]cpuminer[/b] (voir plus bas) sinon vous pouvez continuer.
+
+[b]Version 1.3 (AVX-AES) :[/b]
+
+Installer les pré-requis et cloner le dépôt git :
+
+[code]
+apt-get install git build-essential autoconf libcurl4-openssl-dev
+
+cd /tmp
+git clone https://github.com/elmad/darkcoin-cpuminer-1.3-avx-aes.git
+[/code]
+
+Ensuite lancer le script [b]autogen.sh[/b] :
+[code]
+cd darkcoin-cpuminer-1.3-avx-aes
+chmod +x autogen.sh
+./autogen.sh
+[/code]
+
+Et pour finir, on lance la compilation :
+[code]./configure CFLAGS="-O3 -march=native"
+make
+make install[/code]
+
+[b]Version 1.2c :[/b]
+
+Les instructions sont les mêmes sauf qu'il faut utiliser ce dépôt :
+
+[code]git clone https://github.com/ig0tik3d/darkcoin-cpuminer-1.2c.git[/code]
+
+[h]Inscription sur un pool Dash[/h]
+
+Bon maintenant que notre mineur est en place sur le serveur, il faut s'inscrire dans un pool. Il en existe des centaines, pour commencer je vous conseille celui-là :
+
+[center][b][url]https://www2.coinmine.pl/dash/index.php?page=register[/url][/b][/center]
+
+Pour l'inscription, il va vous falloir une adresse dash, pour ceux qui sont habitués au Bitcoin, je n'ai rien à vous apprendre, c'est le même principe. Il suffit de télécharger le client officiel [b][url=http://dashcoin.net/#download]dash-qt[/url][/b] et de générer une adresse :
+
+[url=http://i.imgur.com/4DAWzXw.png][img]http://i.imgur.com/4DAWzXw.png[/img][/url]
+
+Sinon vous pouvez utiliser [url]https://www.dashpay.io/[/url] ou [url=https://play.google.com/store/apps/details?id=hashengineering.darkcoin.wallet&hl=fr]l'application android[/url].
+
+Une fois inscrit, connectez-vous sur le site et aller dans la section [b]My Account > My Workers[/b]. C'est ici où vous allez pouvoir déclarer vos [b]workers[/b] (vos serveurs, votre PC @home, l'ordinateur de mémé...etc). Donner un nom au worker, le nom de la machine par exemple et mettez de côté le mot de passe :
+
+[img]http://i.imgur.com/vGXxsTO.png[/img]
+
+Normalement il devrait apparaître dans la liste à côté en tant que worker non actif.
+
+[h]Configuration du worker[/h]
+
+[b]Ubuntu via upstart[/b]
+
+Créer un nouveau fichier d'initialisation Upstart [b]/etc/init/dashminer.conf[/b] avec le contenu suivant :
+
+[code]
+description "Multi-threaded CPU miner for Dash"
+
+start on runlevel [2345]
+stop on starting rc RUNLEVEL=[016]
+
+expect fork
+
+respawn
+respawn limit 5 120
+kill timeout 60
+
+exec /usr/local/bin/minerd -a X11 --background --url stratum+tcp://mine3.coinmine.pl:PORT -u USERNAME.WORKERNAME -p WORKER PASSWORD
+[/code]
+
+[b]Debian 8 via Systemd[/b]
+
+Créer un nouveau service [b]/etc/systemd/system/dashminer.service[/b] avec le contenu suivant :
+
+[code]
+[Unit]
+Description= Multi-threaded CPU miner for Dash
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/minerd -a X11 --background --url stratum+tcp://mine3.coinmine.pl:PORT -u USERNAME.WORKERNAME -p WORKER PASSWORD
+
+TimeoutStopSec=5s
+TimeoutStartSec=2s
+StartLimitInterval=60s
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target
+[/code]
+
+Ensuite il faut remplacer les termes dans la dernière commande avec ceci :
+
+[quote]
+[b]PORT[/b] : 
+
+- 6099 (high hashrate > 100 Mh)
+- 6090 (medium hashrate < 100 Mh)
+- 16090 (low hashrate < 10Mh)
+
+Le port dépend de la vitesse de calcul des hashs, si vous possédez de peu de puissance de calcul, choisissez le port 16090. Pour donner un ordre d'idée, avec un [b]Intel Xeon E3 1225v2[/b], je monte au maximum à [b]1.8Mh/s[/b].
+
+[b]USERNAME.WORKERNAME[/b] : Nom d'utilisateur [b].[/b] Nom du worker
+[b]WORKER PASSWORD[/b] : Mot de passe du worker
+[/quote]
+
+Maintenant on peut démarrer le service avec :
+
+[code]
+service dashminer start ou systemctl start dashminer (avec systemd)
+[/code]
+
+Vérifiez que le service tourne correctement avec :
+
+[code]
+service dashminer status ou systemctl status dashminer (avec systemd)
+[/code]
+
+Vous devriez voir apparaître votre worker actif dans la pool avec le hashrate correspondant et les Dash générés :
+
+[url=http://i.imgur.com/WAlaT4S.png][img]http://i.imgur.com/WAlaT4S.png[/img][/url]
+
+Attention, les dash générés doivent être [b][u]confirmés[/u][/b] avant pour qu'il soient crédités à l'adresse que vous avez fournit lors de votre inscription. Aussi je vous conseille de générer une adresse Dash pour chaque pool, cela vous permettra d'identifier d'où proviennent les pièces.
+
+Niveau CPU ça donne quelque chose comme ça : 
+
+[url=http://i.imgur.com/FP8kh3v.png][img]http://i.imgur.com/FP8kh3v.png[/img][/url]
+[center][i]Commande htop[/i][/center]
+
+[h]Type de rémunération[/h]
+
+[b]PROP[/b] :
+Chaque fois qu'un bloc est trouvé, les mineurs sont payés en fonction de leurs parts (shares). Le risque est pour le mineur car il se peux que le bloc soit plus long que prévu a miner. Néanmoins, si vous tombez sur un pool avec de nombreux mineurs ou un pool chanceux alors vous serez payé plus vite et basé sur vos parts dans le round.
+
+[b]PPLNS[/b] :
+Cette méthode ne regarde pas le nombre de parts lors d'un round comme PROP, mais regarde les N dernières parts (où N est un grand nombre, par exemple 1 million) même sur les précédents rounds. En clair si vous voulez que vos parts comptent et le paiement soient basés sur elles, vous devez rester sur le pool jusqu'à la fin d'un bloc. Cette méthode est utilisée pour éviter les mineurs qui changent de pool fréquemment.
+
+[b]PPS[/b] :
+Comme son nom l'indique, vous êtes payé par Parts, même si le bloc n'est pas trouvé. Il suffit de soumettre des parts valides.
+
+[b]RBPPS[/b] :
+Idem que pour PPS mais si un bloc est orphelin (orphan) alors vous n’êtes pas payé pour ce round.
+
+[h]Echange[/h]
+
+Une fois que vous avez amassé suffisamment de pièce, vous pouvez les échanger sur un site de trading pour les convertir en BTC puis en EUR ou directement EUR si vous le souhaitez. Il existe pleins de site d'échange, les plus connus sont :
+
+[quote]
+[url]https://www.cryptsy.com/[/url]
+[url]https://poloniex.com/[/url]
+[url]https://bter.com/[/url]
+[/quote]
+
+[h]Questions et support[/h]
+
+[quote][center][b][url=http://mondedie.fr/viewtopic.php?id=6866]Si vous avez une question, une remarque ou une suggestion, c'est par ici[/url][/b][/center][/quote]
+
+[right][i]Merci à [b]Aerya[/b] du forum Ti pour la découverte ! ;)[/i][/right]
