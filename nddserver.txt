@@ -1,0 +1,141 @@
+Une question récurrente qui revient régulièrement sur le forum est : 
+
+[center]“[i]Comment associer un nom de domaine à un serveur ?[/i]“ [/center]
+
+Il n'y a rien de bien compliqué mais je voulais revenir sur ce point essentiel lorsqu'on installe équipement sur internet, pas forcément un serveur, pour qu'il soit accessible autrement que par son adresse IP.
+
+On va commencer par un peu de vocabulaire, car c'est important d'employer les bons termes pour mieux se comprendre :)
+
+- [b]Hostname[/b] = Nom d'hôte, c'est le nom que l'on donne à l'équipement réseau
+- [b]FQDN[/b] = Nom de domaine complètement qualifié
+- [b]Reverse[/b] = Fait la correspondance entre une @IP et un nom d'hôte
+
+Le [b]nom d'hôte[/b] (hostname) est un surnom que vous donnez à un équipement réseau (comme un serveur, un poste de travail, une imprimante...etc) permettant de l'identifier de manière unique au sein d'un réseau [b]local[/b] et d'y accéder sans connaître par cœur l'adresse IP associée. Selon la norme, le hostname peut être composé uniquement de caractères allant A jusqu'à Z, de chiffres de 0 à 9 et de tirets, rien d'autre.
+
+Le [b]FQDN[/b] permet de rendre un équipement réseau accessible partout sur internet et de l'identifier aussi de manière unique.
+
+C'est peut-être pas encore assez clair, on va prendre un exemple :
+
+[code]
+hostname : monsuperserveur
+domaine  : mondomaine.fr
+FQDN     : monsuperserveur.mondomaine.fr.
+reverse  : monsuperserveur.mondomaine.fr
+[/code]
+
+Dans cet exemple j'ai nommé mon serveur "monsuperserveur", c'est totalement arbitraire, vous pouvez le nommer comme bon vous semble. Lorsqu'on administre un parc conséquent de machines, on nomme généralement l'équipement en fonction de son emplacement, son type...etc par exemple :
+
+[quote]B0127N08 : Bureau 01 - Windows 7 - Poste N08
+B0228N09 : Bureau 02 - Windows 8 - Poste N09
+S0508N01 : Salle serveur 05 - Debian 8 - Serveur N01
+S0512N02 : Salle serveur 05 - Windows server 2012 - Serveur N02[/quote]
+
+Donc vous l'avez compris, ça reste au choix de l'administrateur réseau, dans ce tuto ce sera "[b]monsuperserveur[/b]", un serveur linux flambant neuf. A ce stade, notre serveur n'est accessible que depuis le réseau local, pour qu'il soit accessible partout on va lui associer un FQDN, un nom de domaine complètement qualifié. Dans notre exemple il s'agit de : 
+
+[center][b]monsuperserveur.mondomaine.fr.[/b][/center]
+
+Le point final est important, il désigne la racine DNS. Donc cette adresse révèle la position absolue (alors que le hostname est relatif) du nœud dans l'arborescence DNS, elle identifie de manière précise (sauf dans le cas de l'anycast) l'équipement sur internet.
+
+[quote]Bon assez de blabla, concrètement comment on configure tout ça ?[/quote]
+
+Le nom d'hôte se place dans le fichier [b]/etc/hostname[/b] :
+
+[code]echo "monsuperserveur" > /etc/hostname[/code]
+
+Ensuite le FQDN se configure dans le fichier [b]/etc/hosts[/b], il s'organise comme ceci ( Il faut remplacer les termes entre { } ) :
+
+[code]
+127.0.0.1    localhost.localdomain      localhost
+{ IPv4 }     { FQDN }                   { HOSTNAME }
+{ IPv6 }     { FQDN }                   { HOSTNAME } # Facultatif
+[/code]
+
+Avec notre exemple ça donne :
+
+[code]
+127.0.0.1           localhost.localdomain           localhost
+x.x.x.x             monsuperserveur.mondomaine.fr   monsuperserveur
+xxx:xxx:x:xxxx::1   monsuperserveur.mondomaine.fr   monsuperserveur
+[/code]
+
+Pour tester la cohérence des fichiers [b]/etc/hosts[/b] et [b]/etc/hostname[/b], on va utiliser la commande hostname :
+
+[code]
+hostname -d # Doit retourner votre nom de domaine
+hostname -s # Doit retourner le nom d'hôte
+hostname -f # Doit retourner le FQDN
+[/code]
+
+Redémarrer le serveur pour que les modifications soient prises en compte.
+
+Bon côté serveur on a finit, maintenant il faut paramétrer votre nom de domaine depuis l'interface de votre registrar. Pour ce tutoriel, j'ai choisi OVH mais les manipulations qui suivent sont très génériques et s'appliquent à tous les registrars. Il va falloir modifier la zone DNS de notre nom de domaine pour y ajouter un enregistrement [b]A[/b] qui fera l'association entre votre FQDN et l'IP de votre serveur.
+
+Ouvrir l'interface d'administration du nom de domaine et cliquer sur "Ajouter une entrée" :
+[img]http://i.imgur.com/H6mWr6g.png[/img]
+
+Choisir un enregistrement de type A :
+
+[img]http://i.imgur.com/Yv3FDWG.png[/img]
+
+Saisir le nom d'hôte, laisser le TTL par défaut et entrer l'adresse IP :
+
+[img]http://i.imgur.com/l8ThJqP.png[/img]
+[i]*TTL = Time To Live : Exprime la durée (en secondes) de validité des informations contenues dans votre fichier de zone. Une fois ce délai expiré, les autres serveurs DNS doivent vérifier à nouveau les enregistrements.[/i]
+
+Vérifier les informations puis cliquer sur "valider" :
+
+[img]http://i.imgur.com/2uujF3t.png[/img]
+
+Refaire la même manipulation avec un enregistrement de type [b]AAAA[/b] si vous souhaitez que votre serveur soit accessible via IPv6.
+
+Attendez quelques minutes la mise à jour des DNS de votre FAI. La première fois qu'un enregistrement est ajouté dans une zone DNS, l'information est transmise aux autres serveurs DNS très rapidement (prendre en compte la distance entre les DNS tout de même) grâce à l'incrémentation du serial de la zone, le temps de propagation est généralement très court car le TTL n'est effectif que lorsqu'un enregistrement est modifié.
+
+Vous pouvez vérifier la propagation avec les commandes suivantes :
+
+[code]
+# Sous linux
+
+host monsuperserveur.mondomaine.fr
+
+dig +nocmd +noall +answer A monsuperserveur.mondomaine.fr.
+dig +nocmd +noall +answer A monsuperserveur.mondomaine.fr. @resolver1.dns.watch.
+dig +nocmd +noall +answer A monsuperserveur.mondomaine.fr. @resolver1.opendns.com.
+dig +nocmd +noall +answer A monsuperserveur.mondomaine.fr. @google-public-dns-a.google.com.
+
+# Sous windows
+
+nslookup monsuperserveur.mondomaine.fr.
+nslookup monsuperserveur.mondomaine.fr. resolver1.dns.watch.
+nslookup monsuperserveur.mondomaine.fr. resolver1.opendns.com.
+nslookup monsuperserveur.mondomaine.fr. google-public-dns-a.google.com.
+[/code]
+
+La propagation dans le monde entier prend un peu plus de temps, les serveurs choisis au-dessus étant plus proches, l'information arrive forcément plus vite. Vous pouvez utiliser le site [url]https://www.whatsmydns.net/[/url] pour vérifier les serveurs DNS around the world :-)
+
+[img]http://i.imgur.com/VsrB6FZ.png[/img]
+
+Une fois l'enregistrement [b]A[/b] propagé, on peut passer à la dernière étape : [b]Configurer le reverse[/b]. 
+
+Donc comme on a dit tout à l'heure, le reverse permet de faire la correspondance entre une @IP et un nom d'hôte, c'est donc l'inverse d'un enregistrement [b]A[/b]. Le reverse peut-être modifié que depuis l'interface de votre hébergeur puisque l'enregistrement PTR n'est accessible que dans la zone de l'hébergeur ou de l'entité qui gère la plage d'IP où se trouve votre serveur.
+
+J'ai pris deux exemples pour illustrer le tutoriel, un chez Scaleway (online.net) et l'autre chez Kimsufi (OVH) :
+
+[img]http://i.imgur.com/gmPOttH.png[/img]
+[img]http://i.imgur.com/3kH9OcJ.png[/img]
+
+Voila c'est pas plus compliqué que ça. La plupart du temps, l'hébergeur vérifie la présence d'un enregistrement [b]A[/b] avant de valider le reverse, c'est pour ça qu'il vaut mieux attendre un peu à l'étape précédente.
+
+Vous pouvez vérifier la propagation du reverse avec les commandes suivantes ( w.x.y.z = IP du serveur ) :
+
+[code]
+# Sous linux
+host w.x.y.z
+dig +nocmd +noall +answer -x w.x.y.z
+
+# Sous windows
+ping -a w.x.y.z
+nslookup w.x.y.z
+
+[/code]
+
+[quote][center][b][url=http://mondedie.fr/viewtopic.php?id=6752]Si vous avez une question, une remarque ou une suggestion, c'est par ici[/url][/b][/center][/quote]
