@@ -1,0 +1,166 @@
+[quote]
+[b][color=#ff0303]ATTENTION : [/color][/b][b]Pensez à mettre à jour les scripts régulièrement avec la commande suivante (Ne faites pas un simple git pull sinon vous allez devoir refaire l'installation...) :[/b]
+[/quote]
+
+[code]
+# Exécuter cette commande avec le compte root
+cd /opt/full-backup && git stash && git pull && git stash pop
+
+# Puis exécuter le script de sauvegarde pour vérifier que ça fonctionne
+/opt/full-backup/backup.sh
+[/code]
+
+[quote][b]Dernière mise à jour[/b] : [b][color=#ff0303]07/06/2015 à 01:23:00[/color][/b]
+Liste des modifications : [url]https://github.com/hardware/full-backup/commits/master[/url][/quote]
+
+[center][b]Sauvegarde et restauration d'un système sous Linux[/b][/center]
+
+Il y a quelques mois, j'ai développé deux petits scripts pour mon usage personnel permettant de sauvegarder et de restaurer mon système rapidement sans prise de tête. Ça fait maintenant quelques temps que je les utilises, pour mon utilisation (serveur web/dns, serveur mail et seedbox) ça fonctionne très bien. C'est donc pour cette raison que je veux partager ces scripts avec vous.
+
+Le système est très simple, le script de sauvegarde permet de créer une archive intégrale votre système, vous pouvez bien sûr choisir d'exclure des répertoires/fichiers pour éviter d'avoir une sauvegarde trop volumineuse. Ensuite l'archive est envoyée sur un serveur FTP distant.
+
+Le script de restauration récupère cette archive via FTPS (ou par FTP, mais je le déconseille) et la décompresse à la racine du système. Donc le jour où vous avez un gros pépin avec votre serveur, vous avez juste à récupérer et exécuter le script de restauration, à sélectionner l'archive que vous souhaitez, ensuite le script de restauration se charge de récupérer la sauvegarde, de vérifier son authenticité (pour s'assurer que personne à modifié votre archive) et son intégrité (pour éviter d'appliquer une archive corrompue/altérée pendant le transfert) et de restaurer toutes vos données.
+
+[quote][b]Le but de ce tutoriel est de vous présenter un système de sauvegarde simple à mettre en place avec une procédure de restauration clé en main. Si vous cherchez un système de sauvegarde plus complet et plus souple que celui présenté dans ce tuto, n'hésitez pas à aller voir le tutoriel d'ex_rat sur Backup-Manager ici :[/b] [url]http://mondedie.fr/viewtopic.php?id=5834[/url][/quote]
+
+- Durée de sauvegarde : [b]5/10 minutes[/b]
+- Durée de restauration : [b]5/10 minutes[/b]
+
+La durée varie en fonction de la volumétrie des données à sauvegarder et de la bande passante entre votre serveur et le serveur FTP.
+
+[h]Installation[/h]
+
+Mettre à jour le serveur et télécharger Git si ce n'est pas déjà fait :
+
+[code]
+apt-get update && apt-get dist-upgrade
+apt-get install git-core
+[/code]
+
+Télécharger les scripts depuis le dépôt Github puis lancer le script d'installation :
+
+[code]
+cd /opt
+git clone https://github.com/hardware/full-backup.git
+cd full-backup
+chmod +x *.sh && ./install.sh
+[/code]
+
+[h]Script d'installation[/h]
+
+Le script installe quelques pré-requis pour le bon fonctionnement du script de sauvegarde. Ensuite il faut saisir les paramètres de connexion du serveur FTP. Certains hébergeurs comme OVH et Online.net fournissent un espace de stockage FTP, si vous êtes dans ce cas, vous pouvez récupérer vos identifiants de connexion via l'interface de votre hébergeur.
+
+[center][img]http://i.imgur.com/TpCvQq6.png[/img][/center]
+
+Ensuite il faut saisir les répertoires/fichiers à exclure de la sauvegarde, si vous avez des fichiers volumineux, indiquez-les comme ceci :
+
+[center][img]http://i.imgur.com/y5wyWBJ.png[/img][/center]
+
+Si vous ne disposez pas déjà d'une clé GPG, répondez '[b]o[/b]' à la question suivante.
+
+On va créer une clé avec un chiffrement de type RSA d'une longueur de 2048 bits sans expiration :
+
+[code]
+Please select what kind of key you want:
+   (1) RSA and RSA (default)
+   (2) DSA and Elgamal
+   (3) DSA (sign only)
+   (4) RSA (sign only)
+Your selection? 1
+
+RSA keys may be between 1024 and 4096 bits long.
+What keysize do you want? (2048) 4096
+Requested keysize is 4096 bits
+
+Please specify how long the key should be valid.
+         0 = key does not expire
+      <n>  = key expires in n days
+      <n>w = key expires in n weeks
+      <n>m = key expires in n months
+      <n>y = key expires in n years
+Key is valid for? (0) 0
+Key does not expire at all
+
+Is this correct? (y/N) y
+[/code]
+
+Ensuite saisissez des informations (votre nom ou le nom d'hôte de votre serveur) qui vous permettront d'identifier la clé à l'avenir :
+
+[code]
+You need a user ID to identify your key; the software constructs the user ID
+from the Real Name, Comment and Email Address in this form:
+    "Heinrich Heine (Der Dichter) <heinrichh@duesseldorf.de>"
+
+Real name: John Doe
+Email address: john.doe@domain.tld 
+Comment: 
+You selected this USER-ID:
+    "John Doe"
+
+Change (N)ame, (C)omment, (E)mail or (O)kay/(Q)uit? e
+Email address: john.doe@domain.tld
+You selected this USER-ID:
+    "John Doe <john.doe@domain.tld>"
+[/code]
+
+Il ne vous reste plus qu'à définir le mot de passe de la clé privée. Retenez bien ce mot de passe, le script vous le demande juste après :
+
+[center][img]http://i.imgur.com/9oMAWDV.png[/img][/center]
+
+[h]Script de sauvegarde[/h]
+
+Votre système est maintenant prêt à être sauvegardé ! Exécuter le script de sauvegarde avec la commande suivante
+
+[code]./backup.sh[/code]
+
+[center][img]http://i.imgur.com/BnOlSkp.png[/img][/center]
+
+Génial, tous les feux sont verts ! La sauvegarde s'est donc bien déroulée, vous pouvez ajouter une nouvelle tâche via CRON pour exécuter périodiquement le script de sauvegarde :
+
+[code]
+# crontab -e
+
+0 0 * * 0 /opt/full-backup/backup.sh
+[/code][center][i]Dans cet exemple, le script s'exécute tous les dimanches à minuit[/i][/center]
+
+Si un problème survient pendant l'exécution du script de sauvegarde, vous en serez informé par email à l'adresse que vous avez indiqué pendant l'étape d'installation. Le fichier de log peut-être consulté via cette commande :
+
+[code]cat /var/log/backup.log | less -r[/code]
+
+[h]Script de restauration[/h]
+
+Bon, faut se mettre en situation (scénario improbable :P)
+
+Imaginez qu'un mini astéroid se détache de la ceinture de Kuiper pour venir s'écraser sur la baie contenant votre serveur, ce qui l'endommage de manière irréversible. Vous perdez donc toutes vos données, vos fichiers de configurations...etc absolument tout est perdu. Mais heuresement, vous avez effectué une sauvegarde complète de votre serveur quelques jours avant avec le script de sauvegarde, donc tout n'est pas finit ! Ouf :D
+
+Donc dans cette situation, on démarre sur un serveur tout neuf avec un système vierge. Il faut récupérer le script de restauration et relancer l'installation du système de sauvegarde :
+
+[code]
+apt-get update && apt-get dist-upgrade
+apt-get install git-core
+
+cd /opt
+git clone https://github.com/hardware/full-backup.git
+cd full-backup
+
+chmod +x *.sh && ./install.sh
+[/code]
+
+Puis :
+
+[code]./restore.sh[/code]
+
+La procédure de restauration reste très simple :
+
+[center][img]http://i.imgur.com/uMsIuXW.png[/img][/center]
+
+Vous avez juste à choisir entre une restauration [b]distante[/b] ou [b]locale[/b]. La restauration distante récupérère l'archive depuis le serveur FTP, la restauration locale est utile dans le cas où vous n'avez pas perdu vos données et que vous souhaitez utiliser une archive stockée localement. Une fois l'archive récupérée, le script l'analyse et vérifie son intégrité, si elle est saine, l'archive est décompressée à la racine du système.
+
+Exemple avec une restauration [b]locale[/b] :
+[center][img]http://i.imgur.com/GJSF4aH.png[/img][/center]
+
+Ensuite le serveur redémarre et vous retrouvez votre système dans le même état qu'avant la sauvegarde, enjoy ! ;)
+
+--------------------------------------------------------------------------------------------------------------
+
+[quote][center][b][url=http://mondedie.fr/viewtopic.php?pid=13089]Si vous avez une question, une remarque ou une suggestion, c'est par ici[/url][/b][/center][/quote]
