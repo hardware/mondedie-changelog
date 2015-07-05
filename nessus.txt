@@ -1,0 +1,159 @@
+[center][b]Auditer son système avec Nessus[/b][/center]
+
+[center][img]http://i.imgur.com/uBLe4Mj.png[/img][/center]
+
+[b]Nessus est un outil de sécurité informatique. Il signale les faiblesses potentielles ou avérées sur les machines testées. Ceci inclut, entre autres :[/b]
+
+- les services vulnérables à des attaques permettant la prise de contrôle de la machine, l'accès à des informations sensibles
+- les fautes de configuration (relais de messagerie ouvert par exemple)
+- les patchs de sécurité non appliqués, que les failles corrigées soient exploitables ou non dans la configuration testée
+- les mots de passe par défaut, quelques mots de passe communs, et l'absence de mots de passe sur certains comptes systèmes.
+- les services jugés faibles (on suggère par exemple de remplacer Telnet par SSH)
+- les dénis de service contre la pile TCP/IP
+
+[right][i][url=http://fr.wikipedia.org/wiki/Nessus_%28logiciel%29]Wikipédia.[/url][/i][/right]
+
+Nessus est un logiciel plutôt destiné aux entreprises mais il y a une version gratuite, [b]Nessus Home[/b], qui est suffisante pour un usage personnel sur un nombre limité de machines locales. Inscrivez-vous sur le site officiel pour obtenir une clé de licence :
+
+[quote][url]http://www.tenable.com/products/nessus-home[/url][/quote]
+
+Télécharger la dernière version pour Debian ici :
+
+[quote][url]http://www.tenable.com/products/nessus/select-your-operating-system[/url][/quote]
+
+[center][img]http://i.imgur.com/AK17Ayq.png[/img][/center]
+
+Vérifier l'intégrité du paquet (.deb) avec md5sum en comparant l'empreinte depuis cette liste :
+
+[quote][url]https://static.tenable.com/marketing/MD5.asc[/url][/quote]
+
+[code]
+# md5sum Nessus-5.2.7-debian6_amd64.deb
+
+f21234c83aada489ec8fd17fd57fdb93  Nessus-5.2.7-debian6_amd64.deb
+[/code]
+
+[h]Installation[/h]
+
+L'installation de Nessus est très simple, il suffit juste d'utiliser la commande dpkg :
+
+[code]
+# dpkg -i Nessus-5.2.7-debian6_amd64.deb
+
+Selecting previously unselected package nessus.
+(Reading database ... 39942 files and directories currently installed.)
+Unpacking nessus (from Nessus-5.2.7-debian6_amd64.deb) ...
+Setting up nessus (5.2.7) ...
+nessusd (Nessus) 5.2.7 [build N25122] for Linux
+Copyright (C) 1998 - 2014 Tenable Network Security, Inc
+
+Processing the Nessus plugins...
+[##################################################]
+
+All plugins loaded
+
+ - You can start nessusd by typing /etc/init.d/nessusd start
+ - Then go to https://IP:8834/ to configure your scanner
+[/code]
+
+Par défaut, Nessus est installé dans le répertoire [b]/opt/nessus[/b].
+
+[h]Démarrage du daemon[/h]
+
+Démarrer Nessus avec cette commande :
+
+[code]service nessusd start[/code]
+
+[h]Initialisation[/h]
+
+L'interface de gestion de Nessus est accessible depuis le port [b]8834[/b] :
+
+[quote]http://[b]ADRESSE IP:8834[/b]/WelcomeToNessus-Install/welcome[/quote]
+
+Pour continuer, vous devez passer par le protocole HTTPS, cliquez sur le lien indiqué :
+
+[center][img]http://i.imgur.com/wWIZYyS.png[/img][/center]
+
+Par défaut un certificat auto-signé est généré avec la commande nessus-mkcert, ajouter une exception dans votre navigateur pour continuer :
+
+[center][img]http://i.imgur.com/JYToJ3K.png[/img][/center]
+
+Ensuite il faut ajouter un nouveau compte administrateur et indiquer la clé de licence que vous avez reçu par mail. Une fois la clé activée par les serveurs de Nessus, vous devriez avoir ce message :
+
+[center][img]http://i.imgur.com/futJqW7.png[/img][/center]
+
+Cliquez sur [b]Download plugins[/b] pour télécharger toutes les règles de détections à partir du site officiel :
+
+[center][img]http://i.imgur.com/vwZGIxR.png[/img][/center]
+
+Une fois que les plugins ont tous été téléchargés, Nessus commence une phase d'initialisation assez longue, 15-20 minutes en fonction de votre matériel. Ne vous inquiétez pas si vous voyez la charge du processeur monter à 100%, c'est normal. Sur un Kimsufi KS-2, l'initialisation dure un peu moins de 20 minutes mais le proc prend cher quand même :P
+
+[center][img]http://i.imgur.com/AVzvzP9.png[/img][/center]
+
+[h]Configuration de Nessus[/h]
+
+Vous pouvez maintenant vous connecter avec les identifiants saisis pendant l'installation :
+
+[center][img]http://i.imgur.com/JHmbo6r.png[/img][/center]
+
+On commence par configurer les paramètres d'envoie des alertes par email :
+
+[center][img]http://i.imgur.com/uGvVpIi.png[/img][/center]
+
+[quote]Vous devez installer un serveur smtp pour que les alertes puissent être envoyés par Nessus, allez voir l'installation de Postfix dans ce tutoriel : [url=http://mondedie.fr/viewtopic.php?id=5750]http://mondedie.fr/viewtopic.php?id=5750[/url].[/quote]
+
+La première chose à faire avant de lancer un scan, c'est de définir une nouvelle politique de sécurité, cliquez sur [b]Policies[/b] dans le menu en haut, puis [b]New Policy[/b]. Il existe plein de type différents, en fonction du type d'environnement que l'on veut tester (réseau, authentification, application web...etc). Pour ce tutoriel, on va prendre [b]Basic Network Scan[/b] :
+
+[center][img]http://i.imgur.com/olw3fvL.png[/img][/center]
+
+Définir un nom et le périmètre de visibilité :
+
+[center][img]http://i.imgur.com/UH2fC2l.png[/img][/center]
+
+Type du scan, choisir [b]Internal[/b] :
+
+[center][img]http://i.imgur.com/CdnaBTl.png[/img][/center]
+
+Pour finir, saisir les paramètres de connexion SSH pour que Nessus puisse accéder à votre serveur. 
+
+[quote][color=#ff0000][b]ATTENTION[/b][/color] : Si vous avez des logiciels de prévention d'intrusion comme OSSEC, fail2ban...etc installés sur votre serveur, arrêtez les avant de lancer le scan, sinon ils vont entreprendre des actions inutiles et vous envoyer des emails pour rien.[/quote]
+
+[center][img]http://i.imgur.com/Hwoia4U.png[/img][/center]
+
+Cliquez sur [b]Save[/b] pour enregistrer.
+
+[center][img]http://i.imgur.com/hqBULaQ.png[/img][/center]
+
+Maintenant on va ajouter un nouveau scan. Cliquer sur [b]Scans[/b] dans le menu en haut puis [b]New Scan[/b]. Entrer un nom pour le scan et choisir la politique de sécurité que nous avons crée juste avant. Dans le champ [b]Targets[/b], saisissez les IPs des serveurs à scanner :
+
+[center][img]http://i.imgur.com/Mzmt9Cy.png[/img][/center]
+
+Ensuite il faut configurer la [b]périodicité[/b] du scan. Dans l'exemple suivant, Nessus effectura un audit du réseau tous les [b]lundi à 11h30[/b] :
+
+[center][img]http://i.imgur.com/5urWt2T.png[/img][/center]
+
+Ajoutez votre adresse email pour reçevoir le message de reporting. Nessus envoie automatiquement après chaque scan un email contenant un rapport avec les vulnérabilités trouvées au sein de votre réseau.
+
+[center][img]http://i.imgur.com/tf1lr93.png[/img][/center]
+
+Vous pouvez maintenant lancer le scan manuellement en sélectionnant [b]Schedules[/b] dans le menu du haut et en cliquant sur le petit bouton bouton Start. Un audit complet prend environ 5 minutes, mais ça peut varier en fonction de votre serveur.
+
+[center][img]http://i.imgur.com/DctkdPh.png[/img][/center]
+
+Une fois l'audit terminé, vous allez reçevoir un rapport par email comme celui-ci : 
+
+[center][img]http://i.imgur.com/QopoNL6.png[/img][/center]
+
+Cliquer sur le lien pour voir le rapport détaillé :
+
+[center][img]http://i.imgur.com/SUN3NgY.png[/img][/center]
+
+Le rapport indique les vulnérabilités détectées sur vos serveurs pendant le scan, elles sont classées par niveau de gravité. Vous devez prendre très au sérieux les failles/vulnérabilités de niveau [b]High[/b] et [b]Critical[/b], votre serveur pourrait être compromis si vous ne faites rien. Cliquez sur votre serveur pour voir le détail de chaque vulnérabilités. A chaque fois, une explication est présente pour vous aider à mieux identifier et régler le problème.
+
+[center][img]http://i.imgur.com/kYN8EN0.png[/img][/center]
+
+Il ne vous reste plus qu'à ajouter de nouveaux types de scan en fonction de vos besoins.
+
+--------------------------------------------------------------------------------------------------------------
+
+[quote][center][b][url=http://mondedie.fr/viewtopic.php?pid=12790]Si vous avez une question, une remarque ou une suggestion, c'est par ici[/url][/b][/center][/quote]
