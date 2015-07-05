@@ -1,0 +1,65 @@
+[h]Script d'installation automatisée d'un serveur de mail sous Linux[/h]
+
+Ce script permet d'installer de manière automatique un serveur mail complet avec Postfix, Dovecot et Rainloop. Il reprend toutes les commandes et fichiers de configuration décrits [url=http://mondedie.fr/viewtopic.php?id=5750]dans ce tutoriel[/url]. C'est un peu comme un assistant, vous avez juste à paramétrer vos adresses emails dans PostfixAdmin et à configurer vos DNS.
+
+Ce script est compatible avec [b]Debian 7 “wheezy”[/b] et [b]Debian 8 “jessie”[/b]
+Durée d'installation : [b]10/15 minutes[/b]
+
+[h]Pré-requis : [/h]
+[quote][list=*]
+[*]Un nom de domaine (avec un accès aux DNS et au fichier de zone)[/*]
+[/list]
+[list=*]
+[*]Nginx[/*]
+[/list]
+[list=*]
+[*]PHP[/*]
+[/list]
+[list=*]
+[*]OpenSSL[/*]
+[/list]
+[list=*]
+[*]MySQL[/*]
+[/list][/quote]
+
+
+[quote]
+[b][color=#ff0303]ATTENTION[/color][/b] : [b]Pour suivre ce tuto, il est impératif que vous sachiez comment configurer votre nom de domaine. Connaitre le fonctionnement des DNS ([url=fr.wikipedia.org/wiki/Domain_Name_System]Domain Name System[/url]) serait un gros plus. Si ce n'est pas le cas, vous ne pourrez pas suivre ce tutoriel correctement. Allez voir le cours suivant pour apprendre à configurer votre nom de domaine : [url]http://fr.openclassrooms.com/informatique/cours/gerer-son-nom-de-domaine[/url][/b]
+[/quote]
+
+[quote]
+[b][color=#ff0303]ATTENTION[/color] : Il vous faut un serveur LEMP (Linux, Nginx, MySQL, PHP) fonctionnel avant de continuer. Si ce n'est pas le cas, allez voir [url=https://www.digitalocean.com/community/search?primary_filter=tutorials&query=lemp]un de ces articles[/url].[/b]
+[/quote]
+
+[h]Installation :[/h]
+
+Mettre à jour le serveur et télécharger Git si ce n'est pas déjà fait :
+
+[code]apt-get update && apt-get dist-upgrade
+apt-get install git-core[/code]
+
+Téléchargez le script depuis le dépôt Github puis lancez-le :
+
+[code]cd /tmp
+git clone https://github.com/hardware/mailserver-autoinstall.git
+cd mailserver-autoinstall
+chmod +x install.sh && ./install.sh
+[/code]
+
+Dépôt Github : [url]https://github.com/hardware/mailserver-autoinstall[/url]
+
+[h]Désinstallation :[/h]
+
+Le script de désinstallation permet de supprimer absolument [b]TOUT[/b] ce qu'à fait le script d'installation. Si vous avez une erreur pendant la configuration du serveur de mail, vous pouvez répartir à zéro avec ce script :
+
+[code]chmod +x uninstall.sh && ./uninstall.sh[/code]
+
+[h]Video :[/h]
+
+[center][video]youtube.com/watch?v=4Pf25McpDsw[/video][/center]
+
+N'oubliez pas de mettre la video en 720p ou 1080p ;)
+
+[quote][b]Attention[/b] : Dans la video j'utilise un FQDN un peu spécial. Il s'agit simplement de mon serveur secondaire nommé "Apolskis", pour les besoins du tutoriel, je ne voulais pas utiliser mon serveur principal. Dans votre cas, vous pouvez laisser les valeurs par défaut pour les sous-domaines.[/quote]
+
+Si vous avez une question, une remarque ou une suggestion, n'hésitez pas à poster un commentaire sur ce topic : [url]http://mondedie.fr/viewtopic.php?id=5794[/url]
