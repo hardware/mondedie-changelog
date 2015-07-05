@@ -1,0 +1,1357 @@
+[center][b]Sécuriser son serveur avec Prelude-IDS et Ossec[/b][/center]
+
+[center][img]http://i.imgur.com/pscz8jq.jpg[/img][/center]
+
+Prelude est un logiciel SIEM qui permet de superviser la sécurité des systèmes informatiques. Prelude collecte, trie, corrèle et affiche tous les événements de sécurité indépendamment des types d'équipements ou système surveillés.
+
+Au-delà de sa capacité de traitement de tout type de journaux d’événements (journaux système, syslog, fichiers de configuration...etc), Prelude est nativement compatible avec de nombreuses sondes anti-intrusion open-source (snort, ossec... etc) grâce à l'utilisation du format IDMEF.
+
+Liens utiles :
+
+[quote]
+[url]https://www.prelude-siem.org/[/url]
+[url=http://fr.wikipedia.org/wiki/Prelude_%28syst%C3%A8me_de_d%C3%A9tection_d%27intrusion%29]http://fr.wikipedia.org/wiki/Prelude[/url]
+[/quote]
+
+[h]Installation[/h]
+
+Actuellement la version la plus récente du projet est la 1.2.5 mais celle des dépôts de Debian [url=https://packages.debian.org/source/sid/prelude-manager]date de 2012[/url] (1.0.1) donc nous allons devoir compiler Prelude à la main. Voici la liste des 6 composants à installer :
+
+[quote]- [b]Prelude Manager[/b] : c'est le module qui traite et centralise les alertes système
+- [b]LibPrelude[/b] : Librairie qui fournie l'API de Prelude
+- [b]LibpreludeDB[/b] : Librairie qui fournie une couche d'abstraction pour le stockage des alertes IDMEF
+- [b]Prelude-LML[/b] : Analyseur/collecteur de log
+- [b]Prelude-Correlator[/b] : Moteur de correlation des alertes système
+- [b]Prewikka WebUI[/b] : Interface web officielle de prelude
+[/quote]
+
+[h]Compilation et installation de Libprelude :[/h]
+
+On doit d'abord installer quelques pré-requis :
+
+[code]
+apt-get install python2.7-dev libpcre3-dev swig pkg-config
+
+# Sous Debian 7 :
+apt-get install libgnutls-dev
+
+# Sous Debian 8 :
+apt-get install libgnutls28-dev
+[/code]
+
+Ensuite on télécharge l'archive puis on configure la compilation :
+
+[code]
+cd /tmp
+wget --no-check-certificate https://www.prelude-siem.org/attachments/download/351/libprelude-1.2.5.tar.gz
+tar -xzf libprelude-1.2.5.tar.gz
+cd libprelude-1.2.5
+
+./configure --without-perl --without-lua --with-python=/usr/bin/python2.7
+[/code]
+
+Après avoir configuré la compilation de libprelude, assurez-vous que le support de Python est activé :
+[code]*** Dumping configuration ***
+    - Generate documentation   : no
+    - LUA binding              : no
+    - Perl binding             : no
+    - Python binding           : yes
+    - Ruby binding             : no
+    - Easy bindings            : yes[/code]
+
+Pour finir l'installation de libprelude, exécutez les commandes suivantes :
+
+[code]
+# On inclus la librairie cstddef
+sed -i '1 i\#include <cstddef>' bindings/python/_PreludeEasy.cxx
+
+make
+make install
+[/code]
+
+[h]Compilation et installation de LibpreludeDB :[/h]
+
+Pour activer le support de MySQL, installez le paquet [b]libmysqlclient-dev[/b] :
+
+[code]apt-get install libmysqlclient-dev[/code]
+
+Ensuite on télécharge l'archive puis on configure la compilation :
+
+[code]
+cd /tmp
+wget --no-check-certificate https://www.prelude-siem.org/attachments/download/352/libpreludedb-1.2.5.tar.gz
+tar -xzf libpreludedb-1.2.5.tar.gz
+cd libpreludedb-1.2.5
+
+# Variable d'environnement obligatoire sinon le linker ne trouvera pas libprelude
+export LD_LIBRARY_PATH=/usr/local/lib
+
+./configure --without-perl
+[/code]
+
+Après avoir configuré la compilation de libpreludeDB, assurez-vous que le support de MySQL est activé :
+
+[code]*** Dumping configuration ***
+    - Generate documentation      : no
+    - Enable MySQL plugin         : yes
+    - Enable PostgreSQL plugin    : no
+    - Enable SQLite3 plugin       : no
+    - Perl binding                : no
+    - Python binding              : yes[/code]
+
+Pour finir l'installation de libprelude, exécutez les commandes suivantes :
+
+[code]
+make
+make install
+[/code]
+
+[h]Création de la base de donnée Prelude[/h]
+
+Prelude stock toutes les informations collectées dans une base de donnée. Donc nous allons créer une nouvelle base nommée "prelude" ainsi qu'un nouvel utilisateur lui aussi nommé "prelude" :
+
+[code]
+# Connexion au serveur MySQL en tant que root
+mysql -u root -p
+
+# Création de la base de données "prelude"
+mysql> CREATE database prelude;
+
+# Création de l'utilisateur "prelude" et ajout des permissions
+mysql> CREATE USER 'prelude'@'localhost' IDENTIFIED BY 'MOT DE PASSE';
+mysql> GRANT USAGE ON *.* TO 'prelude'@'localhost';
+mysql> GRANT ALL PRIVILEGES ON prelude.* TO 'prelude'@'localhost';
+
+# On quitte la console MySQL
+mysql> exit
+
+# Création des tables
+mysql -u prelude prelude -p < /usr/local/share/libpreludedb/classic/mysql.sql
+[/code]
+
+[h]Compilation et installation de Prelude Manager :[/h]
+
+Pour activer le support du format IDMEF XML et de la technique "d'emballage TCP", installez les paquets suivants :
+
+[code]apt-get install libxml2-dev libwrap0-dev[/code]
+
+Ensuite on télécharge l'archive puis on configure la compilation :
+
+[code]
+cd /tmp
+wget --no-check-certificate https://www.prelude-siem.org/attachments/download/356/prelude-manager-1.2.5.tar.gz
+tar -xzf prelude-manager-1.2.5.tar.gz
+cd prelude-manager-1.2.5
+
+./configure
+[/code]
+
+Après avoir configuré la compilation de Prelude Manager, assurez-vous que le support de XML et TCP Wrapper est activé :
+
+[code]*** Dumping configuration ***
+    - TCP wrapper support    : yes
+    - XML plugin support     : yes
+    - Database plugin support: yes[/code]
+
+Pour finir l'installation de Prelude Manager, exécutez les commandes suivantes :
+
+[code]
+make
+make install
+[/code]
+
+[h]Installation de Prelude Correlator :[/h]
+
+Téléchargez l'archive puis lancez l'installateur :
+
+[code]
+cd /tmp
+wget --no-check-certificate https://www.prelude-siem.org/attachments/download/353/prelude-correlator-1.2.5.tar.gz
+tar -xzf prelude-correlator-1.2.5.tar.gz
+cd prelude-correlator-1.2.5
+
+python2.7 setup.py install --record correlator_files.txt
+
+# Si l'installation de Prelude Correlator se passe mal, vous pouvez utiliser la commande suivante
+# pour supprimer tous les fichiers créés par l'installateur :
+# cat correlator_files.txt | xargs rm -rf
+[/code]
+
+[h]Compilation et installation de Prelude-LML :[/h]
+
+Tout d'abord installez le paquet suivant :
+
+[code]apt-get install libicu-dev[/code]
+
+Ensuite on télécharge l'archive puis on configure la compilation :
+
+[code]
+cd /tmp
+wget --no-check-certificate https://www.prelude-siem.org/attachments/download/354/prelude-lml-1.2.5.tar.gz
+wget --no-check-certificate https://www.prelude-siem.org/attachments/download/355/prelude-lml-rules-1.2.5.tar.gz
+tar -xzf prelude-lml-1.2.5.tar.gz
+cd prelude-lml-1.2.5
+
+./configure
+[/code]
+
+Après avoir configuré la compilation de Prelude-LML, assurez-vous que le support de libICU est activé :
+
+[code]*** Dumping configuration ***
+    - Enable TLS support         : yes
+    - Favor libICU over Iconv    : yes[/code]
+
+Pour finir l'installation de Prelude-LML, exécutez les commandes suivantes :
+
+[code]
+make
+make install
+[/code]
+
+[h]Installation de Prewikka :[/h]
+
+Installation des pré-requis :
+
+[code]apt-get install python-cheetah python-setuptools python-cairo python-netaddr gettext[/code]
+
+Téléchargez l'archive puis lancez l'installateur :
+
+[code]
+cd /tmp
+wget --no-check-certificate https://www.prelude-siem.org/attachments/download/357/prewikka-1.2.5.tar.gz
+tar -xzf prewikka-1.2.5.tar.gz
+cd prewikka-1.2.5
+
+python2.7 setup.py install --record prewikka_files.txt --prefix /usr/local
+
+# Si l'installation de Prewikka se passe mal, vous pouvez utiliser la commande suivante
+# pour supprimer tous les fichiers créés par l'installateur :
+# cat prewikka_files.txt | xargs rm -rf
+[/code]
+
+[h]Création de la base de donnée Prewikka[/h]
+
+Tout comme Prelude, Prewikka stock toutes les informations collectées dans une base de donnée. Donc nous allons créer une nouvelle base nommée "prewikka" ainsi qu'un nouvel utilisateur lui aussi nommé "prewikka" :
+
+[code]
+# Connexion au serveur MySQL en tant que root
+mysql -u root -p
+
+# Création de la base de données "prewikka"
+mysql> CREATE database prewikka;
+
+# Création de l'utilisateur "prewikka" et ajout des permissions
+mysql> CREATE USER 'prewikka'@'localhost' IDENTIFIED BY 'MOT DE PASSE';
+mysql> GRANT USAGE ON *.* TO 'prewikka'@'localhost';
+mysql> GRANT ALL PRIVILEGES ON prewikka.* TO 'prewikka'@'localhost';
+
+# On quitte la console MySQL
+mysql> exit
+
+# Création des tables
+mysql -u prewikka prewikka -p < /usr/local/share/prewikka/database/mysql.sql
+[/code]
+
+[h]Configuration de Prewikka[/h]
+
+Editez le fichier de configuration [b]prewikka.conf[/b] :
+
+[code]
+# vim /usr/local/etc/prewikka/prewikka.conf
+
+# ATTENTION : Pour que prewikka soit en français, votre système doit avoir le pack de langue fr_FR.utf8
+# Vous pouvez le vérifier avec la commande : locale -a
+# Si ce n'est pas le cas, utilisez la commande
+# dpkg-reconfigure locales et ajoutez les packs suivants :
+# - fr_FR
+# - fr_FR@euro
+# - fr_FR.utf8
+default_locale: fr_FR
+encoding: utf8
+
+[interface]
+software: Prewikka
+place: CompanyRoxxorDeluxe
+title: Interface Web de Prelude-IDS
+
+# Paramètres de connexion à la base de donnée Prelude
+[idmef_database]
+type: mysql
+host: localhost
+user: prelude
+pass: MOT DE PASSE DE L UTILISATEUR MYSQL PRELUDE
+name: prelude
+
+# Paramètres de connexion à la base de donnée Prewikka
+[database]
+type: mysql
+host: localhost
+user: prewikka
+pass: MOT DE PASSE DE L UTILISATEUR MYSQL PREWIKKA
+name: prewikka
+
+# Par défaut le mot de passe est 'admin', changez-le immédiatement !!
+[auth loginpassword]
+expiration: 60
+initial_admin_user: admin
+initial_admin_pass: admin
+
+# Facultatif mais peut servir en cas de debug
+[log file]
+level: debug
+file: /tmp/prewikka.log
+[/code]
+
+Maintenant il faut ajouter un nouveau script init.d pour pouvoir démarrer/arrêter Prewikka quand on le souhaite :
+
+[code]
+# vim /etc/init.d/prewikka
+
+#!/bin/bash
+
+### BEGIN INIT INFO
+# Provides:          prewikka
+# Required-Start:    $local_fs $remote_fs $network $syslog $named
+# Required-Stop:     $local_fs $remote_fs $network $syslog $named
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# X-Interactive:     true
+# Short-Description: Prewikka est l'interface officielle de Prelude-IDS
+### END INIT INFO
+
+# Variables couleurs
+CSI="\033["
+CEND="${CSI}0m"
+CGREEN="${CSI}1;32m"
+
+# PID du processus
+PID=$(netstat -tlnp | awk '/:8000 */ {split($NF,a,"/"); print a[1]}')
+
+# Variable d'environnement PYTHONPATH
+export PYTHONPATH=/usr/local/lib/python2.7/dist-packages:/usr/local/bin/prewikka-httpd
+
+start() {
+
+  echo -n "Démarrage de Prewikka..."
+  /usr/local/bin/prewikka-httpd &
+  echo -e " ${CGREEN}[OK]${CEND}"
+
+}
+
+stop() {
+
+  echo -n "Arrêt de Prewikka..."
+  kill -9 $PID
+  echo -e " ${CGREEN}[OK]${CEND}"
+
+}
+
+status() {
+
+  if [[ $PID -gt 0 ]]; then
+    echo -e "Prewikka est actuellement en service ${CGREEN}[OK]${CEND}"
+  else
+    echo "Prewikka n'est pas en service..."
+  fi
+
+}
+
+case "$1" in
+start)
+  start
+  ;;
+stop)
+  stop
+  ;;
+restart)
+  stop
+  start
+  ;;
+status)
+  status
+  ;;
+*)
+  echo "Utilisation: $0 {start|stop|restart|status}"
+  exit 1
+  ;;
+esac
+
+exit 0[/code]
+
+Rendez le script exécutable :
+
+[code]chmod +x /etc/init.d/prewikka[/code]
+
+Puis démarrez Prewikka avec la commande suivante :
+
+[code]
+# Démarrage du service
+service prewikka start
+Démarrage de Prewikka... [OK]
+
+# Vous pouvez vérifier que Prewikka est bien en cours d'exécution avec :
+service prewikka status
+Prewikka est actuellement en service [OK]
+[/code]
+
+Une fois le service démarré, l'interface web est accessible via l'adresse suivante :
+
+[code]IP_DU_SERVEUR:8000[/code]
+
+Connectez-vous avez les identifiants définis dans le fichier de configuration de Prewikka :
+
+[center][img]http://i.imgur.com/OdPuYUy.png[/img][/center]
+
+Pour le moment l'interface est quasiment vide, c'est normal, nous n'avons pas encore configuré d'agent de surveillance. Nous allons voir ceci dans le partie suivante.
+
+[h]Installation des agents de surveillance[/h]
+
+Prelude utilise un système de sonde/plugins installé en local ou sur un ensemble de machine afin de récupérer divers informations comme des audits, les alertes et les évènements système...etc Pour ajouter une nouvelle sonde, on va utiliser la commande prelude-admin.
+
+[b]Création du profil de Prelude-manager[/b]
+
+Tout d’abord, il faut commencer par créer le profil du Prelude-Manager. Pendant la création du profil, prelude-admin va créer une clé privée/publique afin de sécuriser les échanges entre Prelude-Manager et la sonde. Mais le soucis, c'est que ça prend tu temps, énormement de temps car le système à besoin d'entropie pour pouvoir générer des nombres quasi-aléatoires.
+
+Pour l'aider dans cette tâche, on va installer rng-tools (Hardware Random Generator) :
+
+[code]apt-get install rng-tools[/code]
+
+Editez le fichier [b]/etc/default/rng-tools[/b] et ajoutez ces deux lignes :
+
+[code]
+HRNGDEVICE=/dev/urandom
+RNGDOPTIONS="-W 80% -t 20"
+[/code]
+
+Et pour finir, lancez le service :
+
+[code]/etc/init.d/rng-tools start[/code]
+
+On peut maintenant créer un nouveau profil :
+
+[code]prelude-admin add prelude-manager --uid 0 --gid 0[/code]
+
+[b]Ajout d'une sonde : Prelude-Correlator[/b]
+
+Pour ajouter une nouvelle sonde, on va devoir utiliser deux commandes en parallèle, une pour générer un mot de passe unique (One-Time Password) et accepter la requête puis l'autre pour enregistrer la nouvelle sonde. Pour exécuter deux commandes en même temps, on va utiliser [b]screen[/b].
+
+Installez-le si ce n'est pas déjà fait :
+
+[code]apt-get install screen[/code]
+
+Maintenant entrez la commande screen puis appuyez sur [ESPACE] :
+
+[code]screen[/code]
+
+On va splitter le terminal en deux parties avec la combinaison et créer un nouveau terminal dans la seconde fenêtre (attention screen est sensible à la casse) :
+
+[code]
+CTRL + a puis S     # On split le terminal en deux
+CTRL + a puis TAB   # On change de fenêtre
+CTRL + a puis c     # On créé une nouvelle fenêtre
+[/code]
+
+A ce stade, vous devriez avoir deux consoles 0 bash / 1 bash :
+
+[center][img]http://i.imgur.com/bGGG1lQ.png[/img][/center]
+
+[quote]RAPPEL : Pour vous déplacer d'une console à l'autre, il faut faire [b]CTRL + a puis TAB[/b].[/quote]
+
+Donc dans la première console, entrez la commande suivante :
+
+[code]prelude-admin registration-server prelude-manager[/code]
+
+Dans la deuxième console, entrez cette commande pour enregistrer la sonde Prelude-Correlator :
+
+[code]prelude-admin register prelude-correlator "idmef:rw admin:r" localhost --uid 0 --gid 0[/code]
+
+Ensuite entrez le mot de passe unique généré par l'utilitaire d'installation, une confirmation vous sera demandée dans l'autre console, acceptez en appuyant sur Y. Voila vous venez d'enregistrer votre première sonde ! :D
+
+[center][img]http://i.imgur.com/0tQKnpF.png[/img][/center]
+
+[quote]Vous pouvez fermer les deux fenêtres splitées en tapant 'exit'[/quote]
+
+[b]Ajout d'une sonde : Prelude-LML[/b]
+
+Même principe qu'avez la sonde Prelude-Correlator, il faut exécuter les deux commandes ci-dessous en parallèle :
+
+[code]
+prelude-admin registration-server prelude-manager
+prelude-admin register prelude-lml "idmef:rw admin:r" localhost --uid 0 --gid 0
+[/code]
+
+[b]Vérification de l'enregistrement des sondes :[/b]
+
+Pour cela, on va utiliser la commande [b]prelude-admin list -l[/b] :
+
+[code]
+# prelude-admin list -l
+
+Profile            UID  GID  AnalyzerID       Permission       Issuer AnalyzerID
+--------------------------------------------------------------------------------
+prelude-correlator root root 1070801180844572 idmef:rw admin:r 1460371894460377
+prelude-manager    root root 1460371894460377 n/a              n/a
+prelude-lml        root root 857822342571350  idmef:rw admin:r 1460371894460377[/code]
+
+Vous devriez avoir 3 profils distincts : [b]prelude-manager[/b], [b]prelude-lml[/b], [b]prelude-correlator[/b].
+
+[h]Configuration de Prelude-Manager :[/h]
+
+Editez le fichier de configuration [b]prelude-manager.conf[/b] puis ajoutez/modifiez les paramètres suivants :
+
+[code]
+# vim /usr/local/etc/prelude-manager/prelude-manager.conf
+
+# Interface d'écoute
+listen = 127.0.0.1
+
+# Paramètres de connexion à la base de donnée
+[db]
+type = mysql
+host = localhost
+port = 3306
+name = prelude
+user = prelude
+pass = xxxxxxxxxxxx
+[/code]
+
+[h]Configuration de Prelude-LML :[/h]
+
+On va passer à la configuration de l'analyseur des fichiers de log, editez le fichier [b]prelude-lml.conf[/b] :
+
+[code]
+# vim /usr/local/etc/prelude-lml/prelude-lml.conf
+
+[prelude]
+# Adresse du serveur maitre (dans notre cas il s'agit du même serveur)
+server-addr = 127.0.0.1
+
+[format=syslog]
+time-format = "%b %d %H:%M:%S"
+prefix-regex = "^(?P<timestamp>.{15}) (?P<hostname>\S+) (?:(?P<process>\S+?)(?:\[(?P<pid>[0-9]+)\])?: )?"
+
+# Ajout des fichiers de log à analyser
+file = /var/log/messages
+file = /var/log/auth.log
+file = /var/log/daemon.log
+file = /var/log/mail.log
+file = /var/log/syslog
+file = /var/log/user.log
+
+[Pcre]
+ruleset=/usr/local/etc/prelude-lml/ruleset/pcre.rules
+[/code]
+
+[h]Ajout des règles de Prelude-LML :[/h]
+
+Tout à l'heure, pendant les étapes de compilation, nous avons téléchargé les règles de détection de Prelude-LML, il ne faut pas oublier de les mettre au bon endroit :
+
+[code]cd /tmp
+tar -xzf prelude-lml-rules-1.2.5.tar.gz
+cd prelude-lml-rules-1.2.5
+cp -r ruleset /usr/local/etc/prelude-lml/[/code]
+
+[h]Ajout des scripts init.d[/h]
+
+Malheuresement, aucun script de gestion des services n'est fournit avec les tarball d'installation du site officiel. Mais on va ruser ! :P
+
+Une solution possible est de récupérer les scripts init.d fournit avec les paquets v1.0.1 depuis les dépôts officiels puis de les modifier pour qu'ils soient compatibles avec la version 1.2.5.
+
+N'exécutez pas les commandes ci-dessous, c'est seulement pour vous montrer comme on procéde pour récupérer un fichier spécifique présent dans un paquet debian :
+
+[code]
+apt-get download prelude-manager
+dpkg --extract prelude-manager_1.0.1-4_i386.deb prelude-manager
+cd prelude-manager
+cp etc/init.d/prelude-manager /etc/init.d/prelude-manager
+[/code]
+
+J'ai mis les 3 scripts init.d sur Gist, entrez les commandes suivantes pour les ajouter au dossier /etc/init.d :
+
+[code]
+cd /etc/init.d
+
+wget https://gist.githubusercontent.com/hardware/92ffda173ed4db68be6f/raw/89e146a5869b09f53863a13f90f146b5d76a408f/prelude-manager
+wget https://gist.githubusercontent.com/hardware/e21731a31e03721a4633/raw/72eb18e8da30c8972def826e35f520f5d8926f46/prelude-lml
+wget https://gist.githubusercontent.com/hardware/ae6969680e5ba2c6579a/raw/c527bd432b5f52e3192d118f701a88742753ef54/prelude-correlator
+
+chmod +x prelude-manager prelude-lml prelude-correlator
+[/code]
+
+[h]Démarrage des services[/h]
+
+Il ne reste plus qu'à démarrer les services :
+
+[code]
+service prelude-manager      start
+service prelude-lml          start
+service prelude-correlator   start
+service prewikka             restart
+[/code]
+
+Exécutez les commandes suivantes pour que les services démarrent automatiquement lors du boot :
+
+[code]
+update-rc.d prelude-manager      defaults
+update-rc.d prelude-lml          defaults
+update-rc.d prelude-correlator   defaults
+update-rc.d prewikka             defaults
+[/code]
+
+[h]Vérification du fonctionnement des sondes[/h]
+
+Bon maintenant que tout est enfin en place, on va vérifier à partir de Prewikka, que toutes les sondes sont bien actives et opérationnelles.
+
+Connectez-vous à l'interface web de Prelude :
+
+[code]IP_DU_SERVEUR:8000[/code]
+
+Vérifiez que les 3 agents sont bien en marche :
+
+[center][img]http://i.imgur.com/CtsO6n7.png[/img][/center]
+
+Maintenant il ne vous reste plus qu'à attendre que des évènements notables surviennent sur votre serveur (une connexion, un changement de mot de passe, une attaque par brute-force, une application qui génére des erreurs...etc). Pour visualiser alertes en cours, cliquez sur "Alertes" :
+
+[center][img]http://i.imgur.com/7K1ZT8Z.png[/img][/center]
+
+Grâce à ce screen, on peut voir que mon serveur (scofield.meshup.net) à subit 4 attaques par Brute Force, plus de 20 tentatives de connexion, une IP reconnue par DSHIELD (donc un vilain qui a déjà été repéré auparavant) et tout ceci en l'espace d'une heure :mad:
+
+Cliquez sur une alerte pour voir tous les détails :
+
+[center][img]http://i.imgur.com/qsejrxo.png[/img][/center]
+
+Prelude receuille énormement d'informations lors d'une alerte. Comme on peut le voir ci-dessus, nous avons l'heure précise à laquelle l'alerte a été déclanchée, sur quel serveur, avec une description précise et un niveau de gravité. Il y aussi le service qui est atteint (ici il s'agit de SSH), les alertes corrélées...etc.
+
+Genial non ? :D
+
+Prelude peut aussi générer des statistiques avec un top 10 des adresses ip suspectes, les ports scannés régulièrement, les types d'alertes...etc
+
+Les types d'alertes générées :
+[center][img]http://i.imgur.com/Gbn4BVP.png[/img][/center]
+
+Les niveaux de gravité :
+[center][img]http://i.imgur.com/98WGYea.png[/img][/center]
+
+Les groupes/règles :
+[center][img]http://i.imgur.com/BmArZm3.png[/img][/center]
+
+[h]Optimisation de la base de donnée[/h]
+
+La taille de la base de donnée évolue en fonction du nombre d'évènements analysés par les agents. Il n'est pas anormal d'avoir plusieurs centaines de milliers d'entrées dans la BDD après un mois d'utilisation. Pour éviter cela, on va utiliser un script avec un tâche CRON pour que la suppression des alertes se fasse de manière automatique et périodique :
+
+[code]
+#!/bin/bash
+
+set -e
+
+DBTYPE="mysql"
+DBHOST="localhost"
+DBNAME="prelude"
+DBUSER="prelude"
+DBPASS="xxxxxx"
+
+# Supprimer tous les évènements antérieur à 1 mois
+KEEPINTERVAL="1 month"
+DATE=$(date -d "now - $KEEPINTERVAL" +%Y-%m-%d)
+
+# Suppression des alertes
+/usr/local/bin/preludedb-admin delete alert     --criteria "alert.create_time     <= $DATE" "type=$DBTYPE host=$DBHOST name=$DBNAME user=$DBUSER pass=$DBPASS"
+
+# Suppression des alertes de type heartbeat (vérification de fonctionnement de l'hôte)
+/usr/local/bin/preludedb-admin delete heartbeat --criteria "heartbeat.create_time <= $DATE" "type=$DBTYPE host=$DBHOST name=$DBNAME user=$DBUSER pass=$DBPASS"
+[/code]
+
+Créer un nouveau fichier nommé [b]/usr/local/bin/prelude-del-events[/b] et ajouter le script ci-dessus dedans puis rendez-le exécutable :
+
+[code]chmod +x /usr/local/bin/prelude-del-events[/code]
+
+Puis ajouter une nouvelle tâche qui se lance tous les jours à minuit par exemple:
+
+[code]
+# crontab -e
+
+0 0 * * * /usr/local/bin/prelude-del-events > /dev/null 2>&1
+[/code]
+
+[h]Synchronisation des composants de Prelude[/h]
+
+Les agents de Prelude peuvent parfois ne plus être synchronisés entre eux à cause le plus souvent d'une désynchronisation temporelle entre les serveurs. Pour éviter ce type de problème, il est conseillé d'utiliser le [url=https://wiki.debian.org/fr/NTP]protocole NTP[/url] pour que vos serveurs soient synchronisés à la seconde près.
+
+Je me suis fait un script pour relancer les composants de Prelude qui ne sont plus en service :
+
+[code]
+#!/bin/bash
+
+CSI="\033["
+CEND="${CSI}0m"
+CGREEN="${CSI}1;32m"
+CRED="${CSI}1;31m"
+
+PL=$(ps -e | grep prelude-lml | wc -l)
+PC=$(ps -e | grep prelude-correla | wc -l)
+PREWIKKA_PID=$(netstat -tlnp | awk '/:8000 */ {split($NF,a,"/"); print a[1]}')
+PRELUDE_MANAGER_PID=$(netstat -tlnp | awk '/:4690 */ {split($NF,a,"/"); print a[1]}')
+
+# Vérification du fonctionnement de Prelude Manager
+if [[ $PRELUDE_MANAGER_PID -gt 0 ]]; then
+    echo -e "${CGREEN}[OK]${CEND} Prelude Manager est actuellement en service"
+else
+    echo -e "${CRED}[KO]${CEND} Prelude Manager n'est pas en service, démarrage imminent..."
+    /etc/init.d/prelude-manager start
+fi
+
+# Vérification du fonctionnement de Prelude LML
+if [[ $PL -eq 1 ]]; then
+    echo -e "${CGREEN}[OK]${CEND} Prelude LML est actuellement en service"
+else
+    echo -e "${CRED}[KO]${CEND} Prelude LML n'est pas en service, démarrage imminent..."
+    /etc/init.d/prelude-lml start
+fi
+
+# Vérification du fonctionnement de Prelude Correlator
+if [[ $PC -eq 1 ]]; then
+    echo -e "${CGREEN}[OK]${CEND} Prelude Correlator est actuellement en service"
+else
+    echo -e "${CRED}[KO]${CEND} Prelude Correlator n'est pas en service, démarrage imminent..."
+    /etc/init.d/prelude-correlator start
+fi
+
+# Vérification du fonctionnement de Prewikka
+if [[ $PREWIKKA_PID -gt 0 ]]; then
+    echo -e "${CGREEN}[OK]${CEND} Prewikka est actuellement en service"
+else
+    echo "Prewikka n'est pas en service, démarrage imminent..."
+    /etc/init.d/prewikka start
+fi
+
+exit 0
+[/code]
+
+Créer un nouveau fichier nommé [b]/usr/local/bin/prelude-check-components[/b] et ajouter le script ci-dessus dedans puis rendez-le exécutable :
+
+[code]chmod +x /usr/local/bin/prelude-check-components[/code]
+
+Puis ajouter une nouvelle tâche qui se lance toutes les heures par exemple:
+
+[code]
+# crontab -e
+
+0 * * * * /usr/local/bin/prelude-check-components > /dev/null 2>&1
+[/code]
+
+Lancez le script manuellement :
+
+[code]/usr/local/bin/prelude-check-components[/code]
+
+Si tous les composants sont en service, vous devriez avoir ceci :
+
+[code]
+[OK] Prelude Manager est actuellement en service
+[OK] Prelude LML est actuellement en service
+[OK] Prelude Correlator est actuellement en service
+[OK] Prewikka est actuellement en service
+[/code] 
+
+[h]BONUS : Accéder à Prewikka avec Nginx[/h]
+
+Ajoutez un nouveau vhost :
+
+[code]
+# vim /etc/nginx/sites-enabled/prewikka.conf
+
+upstream prewikka-upstream {
+    server 127.0.0.1:8000 weight=1 fail_timeout=300s;
+}
+
+server {
+   listen 80;
+   server_name prelude.domain.tld;
+
+   location / {
+
+       proxy_set_header Host              $host;
+       proxy_set_header Origin            http://$host;
+       proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+       proxy_set_header X-Real-IP         $remote_addr;
+       proxy_set_header X-Forwarded-Proto https;
+       proxy_set_header Upgrade           $http_upgrade;
+       proxy_set_header Connection        $http_connection;
+
+       proxy_redirect     off;
+       proxy_read_timeout 5m;
+
+       proxy_pass http://prewikka-upstream;
+
+   }
+
+}
+[/code]
+
+Puis redémarrez Nginx :
+
+[code]service nginx restart[/code]
+
+Voila Prelude est maintenant accessible à partir d'une jolie URL :
+
+[quote][url]http://prelude.domain.tld/[/url][/quote]
+
+N'oubliez pas de changer l'interface d'écoute en modifiant la ligne suivante dans le fichier [b]/etc/init.d/prewikka[/b] :
+
+[code]/usr/local/bin/prewikka-httpd -a 127.0.0.1 -p 8000 -c /usr/local/etc/prewikka/prewikka.conf &[/code]
+
+[quote]
+[b][color=#ff0303]ATTENTION[/color][/b] : L'application Ajenti écoute aussi sur le port 8000, voir ce post pour plus d'info : [url]http://mondedie.fr/viewtopic.php?pid=13307#p13307[/url]
+[/quote]
+
+[center][img]http://i.imgur.com/0gPVcYK.jpg[/img][/center]
+
+Ossec est un [b]HIDS[/b] ([b]H[/b]ost-based [b]I[/b]ntrusion [b]D[/b]etection [b]S[/b]ystem), son rôle est de détecter une intrusion en temps réel au sein d'un système informatique en s'appuyant sur différentes techniques comme l'analyse des logs, la vérification d'intégrité des fichiers système et des fichiers de configuration, en détectant les rootkits...etc.
+
+C'est aussi un [b]IPS[/b] ([b]I[/b]ntrusion [b]P[/b]revention [b]S[/b]ystem), il peut ainsi détecter les robots/scripts qui scannent les ports du serveur, les attaques de type Brute Force sur des services comme SSH, FTP, Nginx, Apache, Postfix...etc Il analyse aussi automatiquement toutes les requêtes HTTP(s) (POST/GET/PUT/DELETE) pour repérer l'exploitation de faille XSS, SQL en les comparant avec des patterns d'attaques connues.
+
+Les adresses IP suspectes sont identifiées et bloquées automatiquement par "[b]active response[/b]" et "[b]firewall drop[/b]". Ossec ne fait pas dans la douceur :lol:
+
+Ossec peut aussi fonctionner en mode Manager/Agents. Le manager correspond au serveur central de votre architecture qui détient toutes les règles de sécurité et la configuration principale de votre système et recueil les informations, les évènements, les tests d'intégrité et les audits provenant de tous agents associés au serveur maitre.
+
+[center][img]http://i.imgur.com/MIYWf0W.jpg[/img][/center]
+
+Dans ce tutoriel, pour des questions de simplicité, nous allons rester dans un schéma simple, avec un seul serveur à surveiller donc nous ne parlerons pas de la gestion des agents.
+
+Pensez à mettre à jour votre système avant de commencer :
+
+[code]apt-get update && apt-get dist-upgrade[/code]
+
+[h]Installation d'Ossec [/h]
+
+[quote]Liens utiles :
+[url]http://www.ossec.net/[/url]
+[url]http://en.wikipedia.org/wiki/OSSEC[/url]
+[url]http://ossec-docs.readthedocs.org/en/latest/index.html[/url][/quote]
+
+On ne v'a pas passer par les dépôts d'AlienVault pour installer ossec, on va plutôt utiliser le script d'installation officiel fournit avec le tarball pour nous faire une installation aux petits oignons :P
+
+Exécutez les commandes suivantes :
+
+[code]
+cd /tmp
+wget https://github.com/ossec/ossec-hids/archive/2.8.2.tar.gz
+tar xzf 2.8.2.tar.gz
+cd ossec-hids-2.8.2/
+
+# Ajout du support de Prelude si vous l'avez installé, ce n'est pas obligatoire
+cd src && make setprelude && cd ..
+
+# Deux librairies dev sont nécessaires pour la compilation (sous debian 8.1 en tout cas)
+apt-get install libgcrypt20-dev libgnutls28-dev
+[/code]
+
+Puis lancez le script d'installation :
+
+[code]./install.sh[/code]
+
+Lors de l'installation, répondez à toutes les questions :
+
+[quote]OSSEC HIDS v2.8.1 Script d'installation - [url]http://www.ossec.net[/url]
+
+ Vous êtes sur le point d'installer OSSEC HIDS.
+ Vous devez avoir une compilateur C préinstallé sur votre système.
+ Si vous avez des questions ou des commentaires, envoyez un email
+ à dcid@ossec.net (ou daniel.cid@gmail.com).
+
+  - Système: Linux scofield 3.2.0-4-686-pae
+  - Utilisateur: root
+  - Hôte: [b]hostname[/b]
+
+
+  -- Appuyez sur Entrée pour continuer ou Ctrl-C pour annuler. --
+
+
+1- Quel type d'installation voulez-vous (serveur, agent, local ou aide) ? [b]serveur[/b]
+
+  - [b]Installation du serveur choisie.[/b]
+
+2- Définition de l'environnement d'installation.
+
+ - Choisissez votre répertoire d'installation de OSSEC HIDS [/var/ossec]:
+
+    [b]- L'installation sera faite sur  /var/ossec .[/b]
+
+3- Configuration de OSSEC HIDS.
+
+  3.1- Voulez-vous une alerte par email ? (o/n) [o]: [b]o[/b]
+   - Quel est votre adresse email ? [b]admin@domain.tld[/b]
+
+   - Nous trouvons votre serveur SMTP sur: mail.domain.tld.
+   - Voulez-vous l'utiliser ? (o/n) [o]: [b]o[/b]
+
+   --- [b]Serveur SMTP utilisé :  mail.domain.tld.[/b]
+
+  3.2- Voulez-vous démarrer le démon de vérification d'intégrité ? (o/n) [o]: [b]o[/b]
+
+   [b]- Lancement de syscheck (démon de vérification d'intégrité).[/b]
+
+  3.3- Voulez-vous démarrer le moteur de détection de rootkit ? (o/n) [o]: [b]o[/b]
+
+   [b]- Lancement de rootcheck (détection de rootkit).[/b]
+
+  3.4- La réponse active vous permet d'éxécuter des commandes
+       spécifiques en fonction d'évènement. Par exemple,
+       vous pouvez bloquer une adresse IP ou interdire
+       l'accès à un utilisateur spécifique.
+       Plus d'information sur :
+       [url]http://www.ossec.net/en/manual.html#active-response[/url]
+
+   - voulez-vous démarrer la réponse active ? (o/n) [o]: [b]o[/b]
+
+     [b]- Réponse active activée.[/b]
+
+   - Par défaut, nous pouvons activer le contrôle d'hôte
+     et le pare-feu (firewall-drop). Le premier ajoute
+     un hôte dans /etc/hosts.deny et le second bloquera
+     l'hôte dans iptables (sous linux) ou dans ipfilter
+     (sous Solaris, FreeBSD ou NetSBD).
+   - Ils peuvent aussi être utilisés pour arrêter les scans
+     en force brute de SSHD, les scans de ports ou d'autres
+     formes d'attaques. Vous pouvez aussi les bloquer par
+     rapport à des évènements snort, par exemple.
+
+   - Voulez-vous activer la réponse pare-feu (firewall-drop) ? (o/n) [o]: o
+
+     [b]- pare-feu (firewall-drop) activé (local) pour les levels >= 6[/b]
+
+   - liste blanche (white list) par défaut pour la réponse active :
+      - xxx.xxx.xxx.xxx
+      - xxx.xxx.xxx.xxx
+
+   - Voulez-vous d'autres adresses IP dans votre liste (white list) ? (o/n)? [n]: [b]n[/b]
+
+  3.5- Voulez-vous activer fonctionnalité syslog (port udp 514) ? (o/n) [o]: [b]o[/b]
+
+   - Fonctionnalité syslog activé.
+
+  3.6- Mise en place de la configuration pour analyser les logs suivants :
+    [b]-- /var/log/messages
+    -- /var/log/auth.log
+    -- /var/log/syslog
+    -- /var/log/mail.info
+    -- /var/log/dpkg.log
+    -- /var/log/nginx/access.log (apache log)
+    -- /var/log/nginx/error.log (apache log)[/b]
+
+ - Si vous voulez surveiller d'autres fichiers, changez
+   le fichier ossec.conf en ajoutant une nouvelle valeur
+   de nom de fichier local.
+   Pour toutes vos questions sur la configuration,
+   consultez notre site web [url]http://www.ossec.net[/url] .
+[/quote]
+
+Une fois la compilation terminée, vous devriez avoir ceci :
+
+[quote]- Le Système est Debian (Ubuntu or derivative).
+ - Script d'initialisation modifié pour démarrer OSSEC HIDS pendant le boot.
+
+[b] - Configuration correctement terminée.[/b]
+
+ - Pour démarrer OSSEC HIDS:
+        [b]/var/ossec/bin/ossec-control start[/b]
+
+ - Pour arrêter OSSEC HIDS:
+        [b]/var/ossec/bin/ossec-control stop[/b]
+
+ - La configuration peut être visualisée ou modifiée dans [b]/var/ossec/etc/ossec.conf[/b]
+
+
+    Merci d'utiliser OSSEC HIDS.
+    Si vous avez des questions, suggestions ou si vous trouvez
+    un bug, contactez nous sur contact@ossec.net ou en utilisant la
+    liste de diffusion publique sur ossec-list@ossec.net
+    ( [url]http://www.ossec.net/en/mailing_lists.html[/url] ).
+
+    Plus d'information peut être trouver sur [url]http://www.ossec.net[/url]
+[/quote]
+
+[h]Configuration d'Ossec[/h]
+
+Maintenant que l'installation est terminée, il faut le configurer. Cette étape n'est pas obligatoire, en fait Ossec est déjà opérationnel car il a été pré-configuré par le script d'installation. Il suffit juste de lancer tous les agents locaux avec la commande [b]service ossec start[/b] pour voir Ossec en action :P
+
+On va quand même prendre quelques minutes et jeter un coup d'oeil à l'arborescence et aux fichiers de configuration :
+
+[code]
+# ls -alX /var/ossec
+
+dr-xr-x---  3 root  ossec 4096 Aug 30 18:02 active-response
+dr-xr-x---  2 root  ossec 4096 Aug 30 17:05 agentless
+dr-xr-x---  2 root  ossec 4096 Aug 30 17:05 bin
+dr-xr-x---  3 root  ossec 4096 Aug 30 17:05 etc
+drwxr-x---  5 ossec ossec 4096 Aug 30 17:05 logs
+dr-xr-x--- 11 root  ossec 4096 Aug 30 17:05 queue
+dr-xr-x---  4 root  ossec 4096 Aug 30 17:05 rules
+drwxr-x---  5 ossec ossec 4096 Aug 30 17:07 stats
+dr-xr-x---  2 root  ossec 4096 Aug 30 17:05 tmp
+dr-xr-x---  3 root  ossec 4096 Aug 30 17:58 var
+[/code]
+
+Description des répertoires importants :
+
+- [b]active-response[/b] : Scripts exécutés par le module Active-response, par exemple [b]firewall-drop.sh[/b] permettant de ban les ips suspectes.
+- [b]bin[/b] : Contient tous les exécutables et binaires d'Ossec.
+- [b]etc[/b] : Contient les fichiers de configuration.
+- [b]logs[/b] : Contient les logs générés par les modules d'Ossec et les agents.
+- [b]rules[/b] : Contient toutes les règles de sécurité.
+- [b]var[/b] : Contient les fichiers de processus (PID) des agents.
+
+Le fichier de configuration principal est stocké dans le répertoire [b]/var/ossec/etc/ossec.conf[/b]. C'est un fichier XML qui permet de définir les règles à inclure, le/les adresses emails de notification, les fichiers à surveiller..etc. Je vais diviser le fichier de configuration par blocs pour mieux vous expliquer le rôle de chacun.
+
+La configuration des alertes par email et des IPs White-listées se fait dans le block [b]Global[/b] :
+
+[code]
+<global>
+    <!-- Notifications par email -->
+    <email_notification>yes</email_notification>
+    <email_to>admin@domain.tld</email_to>
+    <smtp_server>mail.domain.tld.</smtp_server>
+    <email_from>ossecm@domaine.tld</email_from>
+
+    <!-- White List -->
+    <white_list>127.0.0.1</white_list>
+    <white_list>^localhost.localdomain$</white_list>
+    <white_list>xxx.xxx.xxx.xxx</white_list>
+</global>
+[/code]
+
+Vous devez installer un serveur smtp pour que les alertes puissent être envoyés par Ossec, allez voir l'installation de postfix dans [url=http://mondedie.fr/viewtopic.php?id=5750]ce tutoriel[/url].
+
+Configuration du reporting des alertes :
+
+[code]
+<alerts>
+    <!-- On enregistrement l'évènement dans les logs à partir du niveau 1 -->
+    <log_alert_level>1</log_alert_level>
+    <!-- On envoie un email à partir du niveau 6 -->
+    <email_alert_level>6</email_alert_level>
+</alerts>
+[/code]
+
+Ensuite vous pouvez choisir les règles à inclure pour qu'Ossec sache comment surveiller les services installés sur votre serveur. C'est à vous de choisir les règles qui conviennent le mieux à votre installation. La liste suivante est plutôt pertinente dans le cas d'un serveur sous Linux :
+
+[code]<rules>
+    <include>rules_config.xml</include>
+    <include>pam_rules.xml</include>
+    <include>sshd_rules.xml</include>
+    <include>telnetd_rules.xml</include>
+    <include>syslog_rules.xml</include>
+    <include>arpwatch_rules.xml</include>
+    <include>named_rules.xml</include>
+    <include>smbd_rules.xml</include>
+    <include>vsftpd_rules.xml</include>
+    <include>pure-ftpd_rules.xml</include>
+    <include>proftpd_rules.xml</include>
+    <include>ftpd_rules.xml</include>
+    <include>hordeimp_rules.xml</include>
+    <include>roundcube_rules.xml</include>
+    <include>wordpress_rules.xml</include>
+    <include>vpopmail_rules.xml</include>
+    <include>vmpop3d_rules.xml</include>
+    <include>courier_rules.xml</include>
+    <include>web_rules.xml</include>
+    <include>web_appsec_rules.xml</include>
+    <include>apache_rules.xml</include>
+    <include>nginx_rules.xml</include>
+    <include>php_rules.xml</include>
+    <include>mysql_rules.xml</include>
+    <include>postgresql_rules.xml</include>
+    <include>ids_rules.xml</include>
+    <include>squid_rules.xml</include>
+    <include>firewall_rules.xml</include>
+    <include>postfix_rules.xml</include>
+    <include>sendmail_rules.xml</include>
+    <include>imapd_rules.xml</include>
+    <include>mailscanner_rules.xml</include>
+    <include>dovecot_rules.xml</include>
+    <include>vpn_concentrator_rules.xml</include>
+    <include>spamd_rules.xml</include>
+    <include>trend-osce_rules.xml</include>
+    <include>vmware_rules.xml</include>
+    <include>ossec_rules.xml</include>
+    <include>attack_rules.xml</include>
+    <include>clam_av_rules.xml</include>
+    <include>local_rules.xml</include>
+</rules>[/code]
+
+Le bloc suivant se nomme [b]syscheck[/b], il permet de configurer le module de vérification d'intégrité des fichiers système. Ossec analyse et enregistre le checksum des fichiers de configuration et des binaires puis vérifie tous les jours si des modifications ont été apportées en comparant les checksums de la journée précédente.
+
+[code]<syscheck>
+    <!-- Fréquence de vérification en secondes -->
+    <frequency>79200</frequency>
+
+    <!-- Répertoires à vérifier -->
+    <directories check_all="yes">/etc,/usr/bin,/usr/sbin</directories>
+    <directories check_all="yes">/bin,/sbin</directories>
+
+    <!-- Répertoires et fichiers à ignorer -->
+    <ignore>/etc/mtab</ignore>
+    <ignore>/etc/mnttab</ignore>
+    <ignore>/etc/hosts.deny</ignore>
+    <ignore>/etc/mail/statistics</ignore>
+    <ignore>/etc/random-seed</ignore>
+    <ignore>/etc/adjtime</ignore>
+    <ignore>/etc/httpd/logs</ignore>
+    <ignore>/etc/utmpx</ignore>
+    <ignore>/etc/wtmpx</ignore>
+    <ignore>/etc/cups/certs</ignore>
+    <ignore>/etc/dumpdates</ignore>
+    <ignore>/etc/svc/volatile</ignore>
+</syscheck>[/code]
+
+Ensuite le bloc de configuration du module anti-rootkit/trojans. Ossec vérifie aussi la présence de Rootkit/Trojans en cherchant au sein du système des programmes vérolés en se basant sur des signatures/patterns référencés.
+
+[code]<rootcheck>
+    <rootkit_files>/var/ossec/etc/shared/rootkit_files.txt</rootkit_files>
+    <rootkit_trojans>/var/ossec/etc/shared/rootkit_trojans.txt</rootkit_trojans>
+    <system_audit>/var/ossec/etc/shared/system_audit_rcl.txt</system_audit>
+    <system_audit>/var/ossec/etc/shared/cis_debian_linux_rcl.txt</system_audit>
+</rootcheck>[/code]
+
+Les réponses actives sont configurées dans des blocs nommé "[b]active-response[/b]", on va prendre un exemple pour mieux comprendre :
+
+[code]
+<active-response>
+    <command>firewall-drop</command>
+    <location>local</location>
+    <level>6</level>
+    <timeout>600</timeout>
+</active-response>
+
+<command>
+    <name>firewall-drop</name>
+    <executable>firewall-drop.sh</executable>
+    <expect>srcip</expect>
+    <timeout_allowed>yes</timeout_allowed>
+</command>
+[/code]
+
+Cette réponse active exécute la commande local [b]firewall-drop[/b] pour TOUS les évènements de niveau [b]>= 6[/b]. Le script firewall-drop.sh ban les IPs associées à ces évènements pour une durée de [b]600 secondes[/b] (10 minutes).
+
+Pour voir les adresses ip drop, vous pouvez utiliser iptables :
+
+[code]
+# iptables -L INPUT -v -n | less
+
+Chain INPUT (policy ACCEPT 58M packets, 3173M bytes)
+ pkts bytes target     prot opt in     out     source               destination
+  203 19629 DROP       all  --  *      *       82.125.xx.xxx        0.0.0.0/0
+    0     0 DROP       all  --  *      *       5.34.xxx.xxx         0.0.0.0/0
+    0     0 DROP       all  --  *      *       96.27.xx.xx          0.0.0.0/0
+[/code]
+
+Pour débannir une adresse IP, exécutez l'un de ces deux scripts (en fonction de l'AR qui a banni l'IP) :
+
+[code]
+/var/ossec/active-response/bin/host-deny.sh delete - ADRESSE IP
+/var/ossec/active-response/bin/firewall-drop.sh delete - ADRESSE IP
+[/code]
+
+Il ne manque plus qu'une chose à configurer, les fichiers de log à surveiller. Vous devez spécifier le format du fichier de log et son chemin :
+
+[code]<localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/messages</location>
+</localfile>
+
+<localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/auth.log</location>
+</localfile>
+
+<localfile>
+    <log_format>apache</log_format>
+    <location>/var/log/nginx/access.log</location>
+</localfile>
+
+<localfile>
+    <log_format>apache</log_format>
+    <location>/var/log/nginx/error.log</location>
+</localfile>
+
+...etc
+[/code]
+
+[h]Les règles de détection[/h]
+
+Par défaut les règles de détection fonctionnent plutôt bien, généralement vous ne modifierez pas les règles vous même parce qu'elles sont adaptées à un grand nombre de cas de figure. Mais il peut arriver qu'une règle soit trop ou pas assez restrictive.
+
+Je vais prendre un exemple tout bête qui m'est arrivé il y a quelques mois :P. Je me suis fait ban par Ossec en téléchargeant un fichier volumineux contenu sur mon serveur avec IDM (Internet Download Manager). Le problème c'est qu'IDM ouvre plusieurs connexions HTTP/FTP vers le serveur distant pour pouvoir télécharger plus rapidement.
+
+Par défaut, Ossec est configuré pour interdir ce genre d'utilisation en limitant le nombre de connexions. Si la limite est atteinte, l'active response drop l'adresse IP. On va regarder ensemble la règle qui définie cette action :
+
+[code]
+# rules/pure-ftpd_rules.xml
+
+<rule id="11307" level="10" frequency="6" timeframe="60">
+    <if_matched_sid>11301</if_matched_sid>
+    <same_source_ip />
+    <description>Multiple connection attempts from same source.</description>
+    <group>recon,</group>
+</rule>
+
+<rule id="11301" level="3">
+    <if_sid>11300</if_sid>
+    <match>[INFO] New connection from</match>
+    <description>New FTP connection.</description>
+    <group>connection_attempt,</group>
+</rule>
+[/code]
+
+Explication :
+
+Règle 11037 : SI le système détecte plus de [b]6[/b] nouvelles connexions avec la même adresse IP dans un laps de temps inférieure à [b]60[/b] secondes alors il déclenche une alerte de niveau [b]10[/b]. Ossec voit qu'une alerte de niveau 10 a été créée, l'active response se met donc en marche en dropant l'adresse ip à l'origine de la connexion.
+
+Dans mon cas, j'ai juste eu à modifier la fréquence en la passant à [b]9[/b] au lieu de [b]6[/b] car mon IDM ouvre [b]8[/b] connexions simultanément \o/
+
+Maintenant vous vous posez peut-être la question suivante :
+
+[quote]Mais comment trouver la règle qui pose problème ? Il y a des milliers de règles définies dans Ossec :/[/quote]
+
+Facile, normalement quand une alerte de niveau >= 6 est déclenchée, Ossec vous envoie automatiquement un email similaire à celui-ci :
+
+[code]OSSEC HIDS Notification.
+2014 Aug 30 01:07:09
+
+Received From: hostname->/var/log/pure-ftpd.log
+Rule: 11307 fired (level 10) -> "Multiple connection attempts from same source."
+Portion of the log(s):
+
+Aug 30 01:07:08 hostname pure-ftpd[xxxx]: [INFO] New connection from xxx.xxx.xxx.xxx
+Aug 30 01:07:08 hostname pure-ftpd[xxxx]: [INFO] New connection from xxx.xxx.xxx.xxx
+Aug 30 01:07:08 hostname pure-ftpd[xxxx]: [INFO] New connection from xxx.xxx.xxx.xxx
+Aug 30 01:07:08 hostname pure-ftpd[xxxx]: [INFO] New connection from xxx.xxx.xxx.xxx
+Aug 30 01:07:08 hostname pure-ftpd[xxxx]: [INFO] New connection from xxx.xxx.xxx.xxx
+Aug 30 01:07:08 hostname pure-ftpd[xxxx]: [INFO] New connection from xxx.xxx.xxx.xxx
+Aug 30 01:07:08 hostname pure-ftpd[xxxx]: [INFO] New connection from xxx.xxx.xxx.xxx
+Aug 30 01:07:08 hostname pure-ftpd[xxxx]: [INFO] New connection from xxx.xxx.xxx.xxx
+
+--END OF NOTIFICATION[/code]
+
+Il faut récupérer l'ID de la règle (ici 11307) et rechercher le fichier XML correspondant avec fgrep :
+
+[code]
+fgrep 'id="11307"' /var/ossec/rules/*.xml
+/var/ossec/rules/pure-ftpd_rules.xml:  <rule id="11307" level="10" frequency="6" timeframe="60">
+[/code]
+
+Bingo ! On peut maintenant éditer le fichier [b]pure-ftpd_rules.xml[/b] et modifier la règle qui pose soucis :)
+
+[h]Les niveaux de gravité[/h]
+
+Les règles de sécurité sont classées selon plusieurs niveau de gravité, de [b]00[/b] (le minimum) à [b]16[/b] (le maximum). Voici un petit récapitulatif des niveaux de gravité :
+
+[quote]- 00 : À ignorer => Pas d'action à entreprendre
+- 01 : N/S
+- 02 : Notification système, non pertinant vis à vis de la sécurité du système
+- 03 : Événements réussis / autorisés
+- 04 : Les erreurs liées à une mauvaise configuration
+- 05 : Erreurs générées par l'utilisateur
+- 06 : Attaque à faible pertinence
+- 07 : Événements non classés avec une certaine pertinence en matière de sécurité
+- 08 : Événements se produisant pour la première fois
+- 09 : Sources invalides (connexions répétées avec un user qui n'existe pas)
+- 10 : Erreurs générés par plusieurs utilisateurs
+- 11 : Erreurs d'intégrité système
+- 12 : Événements de haute importance (erreurs kernel, attaques spécifiques...)
+- 13 : Détection d'une ou de plusieurs attaques critiques
+- 14 : Détection d'une ou de plusieurs attaques critiques avec correlation (outch :/)
+- 15 : Extrème gravité, faux positif impossible, action à entreprendre immédiatement
+- 16 : Le serveur a été compromis, vous avez perdu la partie. Vous pouvez recommencer si vous le souhaitez mais je vous conseil de vous reconvertir en tant que jardinier au Tibet, par exemple dans le région de Xizang. C'est très paisible là-bas, pas de serveur à surveiller, le pieds quoi :D[/quote]
+
+[h]Ajouter Ossec en tant que sonde de Prelude[/h]
+
+On commence par modifier le fichier de configuration d'Ossec, [b]/var/ossec/etc/ossec.conf[/b], en ajoutant les 3 lignes suivantes dans la section Global :
+
+[code]
+<global>
+    <!-- Configuration de prelude -->
+    <prelude_output>yes</prelude_output>
+    <prelude_profile>ossec</prelude_profile>
+    <prelude_log_level>4</prelude_log_level>
+</global>
+[/code]
+
+Ensuite on ajoute un nouveau profil. C'est toujours le même principe qu'avez les autres sondes, il faut exécuter les deux commandes ci-dessous en parallèle :
+
+[code]
+prelude-admin registration-server prelude-manager
+prelude-admin register ossec "idmef:rw admin:r" localhost --uid ossec --gid ossec
+[/code]
+
+Puis on redémarre les services :
+
+[code]
+service prelude-manager restart
+service prewikka restart
+service ossec restart
+[/code]
+
+Normalement vous devriez voir un nouvel agent apparaître sur Prewikka :
+
+[img]http://i.imgur.com/7hIESjb.png[/img]
+
+[h]OSSEC Web User Interface[/h]
+
+Ossec dispose aussi d'une interface web assez sommaire mais très utile pour visualiser les alertes. L'installation est très simple, exécutez les commandes suivantes :
+
+[code]
+cd /var/www
+# Normalement le User-Agent est facultatif mais le site d'Ossec bloque les requêtes qui n'en n'ont pas...
+wget --header="User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0) Gecko/20100101 Firefox/31.0" http://www.ossec.net/files/ossec-wui-0.8.tar.gz
+tar -xzf ossec-wui-0.8.tar.gz
+mv ossec-wui-0.8 ossec
+rm -rf ossec-wui-0.8.tar.gz
+chown -R www-data:www-data ossec
+usermod -a -G ossec www-data
+chmod -R 770 /var/ossec/tmp
+chgrp www-data /var/ossec/tmp
+[/code]
+
+Ensuite ajoutez un nouveau vhost Nginx :
+
+[code]
+server {
+
+   listen          80;
+   server_name     ossec.domain.tld;
+   root            /var/www/ossec;
+   index           index.php;
+   charset         utf-8;
+
+   auth_basic "Ossec WEB UI";
+   auth_basic_user_file /etc/nginx/passwd;
+
+   location / {
+      try_files $uri $uri/ index.php;
+   }
+
+   location ~* \.php$ {
+        include         fastcgi_params;
+        fastcgi_pass    unix:/var/run/php5-fpm.sock;
+        fastcgi_index   index.php;
+        fastcgi_param   SCRIPT_FILENAME $document_root$fastcgi_script_name;
+   }
+
+}
+[/code]
+
+Redémarrez Nginx :
+
+[code]
+service nginx restart
+[/code]
+
+Vous pouvez maintenant accéder l'interface web d'Ossec :
+
+[center][img]http://i.imgur.com/CMqVgG7.png[/img][/center]
+
+On va en rester là pour l'instant avec Ossec, il vous reste encore pleins de choses à découvrir. N'hésitez pas à aller voir la documentation sur le site officiel pour en apprendre plus afin de créer vos propres règles, vos réponses actives, vos scripts...etc :
+
+[url]http://ossec-docs.readthedocs.org/en/latest/manual/index.html[/url]
+
+[quote][center][b][url=http://mondedie.fr/viewtopic.php?id=5822]Pour poser des questions ou discuter du tuto, c'est par ici[/url][/b][/center][/quote]
