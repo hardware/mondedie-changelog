@@ -939,9 +939,11 @@ mkdir domain.tld && cd domain.tld
 Génération des clés de chiffrement :
 
 [code]
-# Paramètres : -s [sélecteur] -d [nom de domaine]
-opendkim-genkey -s mail -d domaine.tld -b 4096
+# Paramètres : -s [sélecteur] -d [nom de domaine] -b [taille de la clé]
+opendkim-genkey -s mail -d domaine.tld -b 2048
 [/code]
+
+[color=#ff7070][b]Certains registrars n'acceptent pas les clés > 1024 bits donc pensez à changer le paramètre au-dessus si besoin.[/b][/color]
 
 Modification des permissions de la clé privée :
 
