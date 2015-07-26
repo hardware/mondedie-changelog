@@ -42,9 +42,7 @@ Un changelog est disponible sur Github pour que vous puissiez suivre les évolut
 
 [h]Script d'auto-installation :[/h]
 
-Un script d'installation automatique est disponible dans ce topic : [url]http://mondedie.fr/viewtopic.php?pid=11746[/url]
-
-[center][video]youtube.com/watch?v=4Pf25McpDsw[/video][/center]
+[color=#50e619][b]Un script d'installation automatique est disponible dans ce topic : [url]http://mondedie.fr/viewtopic.php?pid=11746[/url][/b][/color]
 
 [h]Schéma :[/h]
 
