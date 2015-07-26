@@ -54,12 +54,4 @@ Le script de désinstallation permet de supprimer absolument [b]TOUT[/b] ce qu'�
 
 [code]chmod +x uninstall.sh && ./uninstall.sh[/code]
 
-[h]Video :[/h]
-
-[center][video]youtube.com/watch?v=4Pf25McpDsw[/video][/center]
-
-N'oubliez pas de mettre la video en 720p ou 1080p ;)
-
-[quote][b]Attention[/b] : Dans la video j'utilise un FQDN un peu spécial. Il s'agit simplement de mon serveur secondaire nommé "Apolskis", pour les besoins du tutoriel, je ne voulais pas utiliser mon serveur principal. Dans votre cas, vous pouvez laisser les valeurs par défaut pour les sous-domaines.[/quote]
-
 Si vous avez une question, une remarque ou une suggestion, n'hésitez pas à poster un commentaire sur ce topic : [url]http://mondedie.fr/viewtopic.php?id=5794[/url]
