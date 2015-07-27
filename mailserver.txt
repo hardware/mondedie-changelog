@@ -1534,7 +1534,7 @@ Dans le fichier [b]/etc/clamav/freshclam.conf[/b], ajouter la ligne suivante au-
 
 [code]DatabaseMirror db.fr.clamav.net[/code]
 
-Ensuite, ajoutez une nouvelle tâche CRON pour mettre à jour la base de signature automatiquement toutes les heures
+Sous Debian 7, ajoutez une nouvelle tâche CRON pour mettre à jour la base de signature automatiquement toutes les heures. La mise à jour est effectuée automatiquement sous Debian 8 Jessie, la tâche CRON n'est plus nécessaire.
 
 [code]
 # crontab -e
