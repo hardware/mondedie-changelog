@@ -10,7 +10,7 @@ cd /opt/full-backup && git stash && git pull && git stash pop
 /opt/full-backup/backup.sh
 [/code]
 
-[quote][b]Dernière mise à jour[/b] : [b][color=#ff0303]07/06/2015 à 01:23:00[/color][/b]
+[quote][b]Dernière mise à jour[/b] : [b][color=#ff0303]02/08/2015 à 22:58:52[/color][/b]
 Liste des modifications : [url]https://github.com/hardware/full-backup/commits/master[/url][/quote]
 
 [center][b]Sauvegarde et restauration d'un système sous Linux[/b][/center]
