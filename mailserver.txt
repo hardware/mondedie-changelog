@@ -2,6 +2,10 @@
 
 [center][img]http://i.imgur.com/yukdywZ.png[/img][/center]
 
+[quote]
+[b][color=#ff483b]Pour [u]toute[/u] demande d'aide par rapport à un problème lié au fonctionnement du serveur de mail, merci d'exécuter le script de debug disponible dans ce [url=http://mondedie.fr/viewtopic.php?id=6998]topic[/url], et de joindre le rapport dans un nouveau post sur le [url=http://mondedie.fr/viewtopic.php?pid=11270]fil de discussion[/url].[/color][/b]
+[/quote]
+
 Bonjour,
 
 Voici un petit tutoriel pour vous aider à installer un serveur mail sous GNU/Linux. Ce tutoriel a été réalisé sous Debian 7 "wheezy" mais la plupart des commandes peuvent être adaptées pour être utilisées sur d'autres distributions. Cette aide n'est volontairement pas exhaustive car le sujet traité peut-être assez complexe quand on le traite de manière plus approfondi et ainsi garder un tuto plus accessible (et beaucoup moins long...). Bien sur, ce tutoriel s'adresse à des personnes qui ont déjà une bonne expérience en administration système sous Linux car il est très important de comprendre ce que l'on fait afin de mieux réagir en cas de disfonctionnement (surtout dans le cas où l'on se sert tous les jours de son serveur pour envoyer/reçevoir des mails).
@@ -1622,5 +1626,9 @@ Et pour finir, il faut reconstruire la hash table et redémarrer postfix :
 postmap /etc/postfix/header_checks
 postfix reload
 [/code]
+
+[quote]
+[b][color=#ff483b]Pour [u]toute[/u] demande d'aide par rapport à un problème lié au fonctionnement du serveur de mail, merci d'exécuter le script de debug disponible dans ce [url=http://mondedie.fr/viewtopic.php?id=6998]topic[/url], et de joindre le rapport dans un nouveau post sur le [url=http://mondedie.fr/viewtopic.php?pid=11270]fil de discussion[/url].[/color][/b]
+[/quote]
 
 [quote][center][b][url=http://mondedie.fr/viewtopic.php?pid=11270]Si vous avez une question, une remarque ou une suggestion, c'est par ici[/url][/b][/center][/quote]
