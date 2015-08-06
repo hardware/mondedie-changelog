@@ -55,3 +55,7 @@ Le script de désinstallation permet de supprimer absolument [b]TOUT[/b] ce qu'�
 [code]chmod +x uninstall.sh && ./uninstall.sh[/code]
 
 Si vous avez une question, une remarque ou une suggestion, n'hésitez pas à poster un commentaire sur ce topic : [url]http://mondedie.fr/viewtopic.php?id=5794[/url]
+
+[quote]
+[b][color=#ff483b]Pour [u]toute[/u] demande d'aide par rapport à un problème lié au fonctionnement du serveur de mail, merci d'exécuter le script de debug disponible dans ce [url=http://mondedie.fr/viewtopic.php?id=6998]topic[/url], et de joindre le rapport dans un nouveau post sur le [url=http://mondedie.fr/viewtopic.php?id=5794]fil de discussion[/url].[/color][/b]
+[/quote]
