@@ -323,7 +323,7 @@ Ensuite nous allons définir les paramètres de chiffrement via TLS :
 # Smtp ( OUTGOING )
 smtp_tls_loglevel            = 1
 smtp_tls_security_level      = may
-smtp_tls_CAfile              = /etc/ssl/certs/CAroot.crt
+smtp_tls_CAfile              = /etc/ssl/certs/ca.cert.pem
 smtp_tls_protocols           = !SSLv2, !SSLv3
 smtp_tls_mandatory_protocols = !SSLv2, !SSLv3
 smtp_tls_mandatory_ciphers   = high
@@ -340,7 +340,7 @@ smtpd_tls_protocols           = !SSLv2, !SSLv3
 smtpd_tls_mandatory_protocols = !SSLv2, !SSLv3
 smtpd_tls_mandatory_ciphers   = high
 smtpd_tls_exclude_ciphers     = aNULL, eNULL, EXPORT, DES, 3DES, RC2, RC4, MD5, PSK, SRP, DSS, AECDH, ADH
-smtpd_tls_CAfile              = /etc/ssl/certs/CAroot.crt
+smtpd_tls_CAfile              = /etc/ssl/certs/ca.cert.pem
 smtpd_tls_cert_file           = /etc/ssl/certs/mailserver.crt
 smtpd_tls_key_file            = /etc/ssl/private/mailserver.key
 smtpd_tls_dh1024_param_file   = $config_directory/dh2048.pem
@@ -390,13 +390,13 @@ Common Name (e.g. server FQDN or YOUR name) []: mail.domain.tld
 [code]
 openssl x509 -req -days 1460 -sha256 -in mailserver.csr -CA ca.cert.pem -CAkey ca.key.pem -CAcreateserial -out mailserver.crt
 
-chmod 444 CAroot.crt
+chmod 444 ca.cert.pem
 chmod 444 mailserver.crt
-chmod 400 CAroot.key
+chmod 400 ca.key.pem
 chmod 400 mailserver.key
 
-mv CAroot.key private/
-mv CAroot.crt certs/
+mv ca.key.pem private/
+mv ca.cert.pem certs/
 mv mailserver.key private/
 mv mailserver.crt certs/
 [/code]
