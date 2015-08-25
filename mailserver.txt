@@ -362,31 +362,31 @@ Si vous n'avez pas de certificat SSL, exécutez les commandes suivantes pour en 
 [code]
 cd /etc/ssl/
 
-openssl genrsa -out CAroot.key 4096
-openssl req -x509 -new -nodes -days 1460 -key CAroot.key -out CAroot.crt
+openssl genrsa -out ca.key.pem 4096
+openssl req -x509 -new -nodes -days 1460 -sha256 -key ca.key.pem -out ca.cert.pem
 
 Country Name (2 letter code) [AU]: FR
 State or Province Name (full name) [Some-State]: France
 Locality Name (eg, city) []: Paris
-Organization Name (eg, company) [Internet Widgits Pty Ltd]: Mon Autorité De Certification
-Organizational Unit Name (eg, section) []:IT
-Common Name (e.g. server FQDN or YOUR name) []: *.domain.tld
+Organization Name (eg, company) [Internet Widgits Pty Ltd]: Corp Ltd
+Organizational Unit Name (eg, section) []: Certificate Authority
+Common Name (e.g. server FQDN or YOUR name) []: Root CA
 [/code]
 
 [code]
 openssl genrsa -out mailserver.key 4096
-openssl req -new -key mailserver.key -out mailserver.csr
+openssl req -new -sha256 -key mailserver.key -out mailserver.csr
 
 Country Name (2 letter code) [AU]: FR
 State or Province Name (full name) [Some-State]: France
 Locality Name (eg, city) []: Paris
-Organization Name (eg, company) [Internet Widgits Pty Ltd]: Mon serveur de mail
-Organizational Unit Name (eg, section) []:IT
+Organization Name (eg, company) [Internet Widgits Pty Ltd]: Corp Ltd
+Organizational Unit Name (eg, section) []:Mail server
 Common Name (e.g. server FQDN or YOUR name) []: mail.domain.tld
 [/code]
 
 [code]
-openssl x509 -req -days 1460 -in mailserver.csr -CA CAroot.crt -CAkey CAroot.key -CAcreateserial -out mailserver.crt
+openssl x509 -req -days 1460 -sha256 -in mailserver.csr -CA ca.cert.pem -CAkey ca.key.pem -CAcreateserial -out mailserver.crt
 
 chmod 444 CAroot.crt
 chmod 444 mailserver.crt
