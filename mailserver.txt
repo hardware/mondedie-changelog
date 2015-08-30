@@ -345,12 +345,7 @@ smtpd_tls_cert_file           = /etc/ssl/certs/mailserver.crt
 smtpd_tls_key_file            = /etc/ssl/private/mailserver.key
 smtpd_tls_dh1024_param_file   = $config_directory/dh2048.pem
 smtpd_tls_dh512_param_file    = $config_directory/dh512.pem
-smtpd_tls_eecdh_grade         = ultra
 
-# Par défaut : aNULL:-aNULL:ALL:!EXPORT:!LOW:!MEDIUM:+RC4:@STRENGTH
-# Actuelle avec la directive smtpd_tls_exclude_ciphers :
-# tls_high_cipherlist  = ALL:!aNULL:!eNULL:!LOW:!MEDIUM:!EXP:!RC2:!RC4:!DES:!3DES:!MD5:!PSK:!SRP:!DSS:!AECDH:!ADH:@STRENGTH
-tls_eecdh_ultra_curve  = secp521r1
 tls_preempt_cipherlist = yes
 tls_random_source      = dev:/dev/urandom
 
