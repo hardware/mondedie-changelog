@@ -1110,19 +1110,6 @@ systemctl restart opendmarc
 systemctl restart postfix
 [/code]
 
-Un autre enregistrement peut-être définit dans vos DNS, il s'agit du "Signing Policy Statement" permettant de savoir si vous signez tous les mails sortants ou seulement quelques uns en particulier. Je sais pas si cet enregistrement est toujours d'actualité, je l'ai trouvé dans la RFC 4870 de 2007 ( [url]http://www.ietf.org/rfc/rfc4870.txt[/url] ) mais elle a été rendue obsolète par la RFC 4871 ( [url]http://www.ietf.org/rfc/rfc4871.txt[/url] ).
-
-L'enregistrement est le suivant :
-
-[code]_domainkey IN TXT "o=-; r=postmaster@domain.tld"[/code]
-
-[quote]
-- [b]o=-[/b] : Outbound Signing policy - Le "-" signifie que tous les mails sortants sont signés avec DKIM, un "~" signifie que certains mails peuvent être signés avec DKIM
-- [b]r=[/b] : Adresse mail pour le reporting d'erreur
-[/quote]
-
-Ça coute rien de le mettre, mais je suis pas certain de son utilité, n'hésitez pas à poster dans le fil de discussion si vous avez plus d'informations à ce sujet.
-
 [h]14 - Installation et configuration de Rainloop[/h]
 
 [center][img]http://i.imgur.com/2PvpLNY.png[/img][/center]
