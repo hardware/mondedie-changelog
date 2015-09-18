@@ -31,7 +31,7 @@ A la fin de ce tutoriel, vous devriez normalement être capable d'envoyer et de 
 [/quote]
 
 [quote]
-[b][color=#ff0303]ATTENTION[/color] : Il vous faut un serveur LEMP (Linux, Nginx, MySQL, PHP) fonctionnel avant de continuer. Si ce n'est pas le cas, allez voir [url=https://www.digitalocean.com/community/search?q=lemp&primary_filter=popular&type=tutorials]un de ces articles[/url]. Vous pouvez choisir un serveur web différent de celui utilisé dans ce tutoriel (Nginx) mais ça sera à vous de le configurer correctement.[/b]
+[b][color=#ff0303]ATTENTION[/color] : Il vous faut un serveur LEMP (Linux, Nginx, MySQL, PHP) fonctionnel avant de continuer. Si ce n'est pas le cas, allez voir [url=https://www.digitalocean.com/community/search?q=lemp&type=tutorials]un de ces articles[/url]. Vous pouvez choisir un serveur web différent de celui utilisé dans ce tutoriel (Nginx) mais ça sera à vous de le configurer correctement.[/b]
 [/quote]
 
 Pensez aussi à mettre à jour votre système avant de commencer :
