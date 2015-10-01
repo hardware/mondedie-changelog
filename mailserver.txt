@@ -1604,7 +1604,6 @@ Certaines informations sensibles sont contenues dans les headers des mails que v
 /^Received:.*with ESMTPSA/  IGNORE
 /^X-Originating-IP:/        IGNORE
 /^X-Mailer:/                IGNORE
-/^Mime-Version:/            IGNORE
 /^User-Agent:/              IGNORE
 [/code]
 
