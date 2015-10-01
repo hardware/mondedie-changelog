@@ -1457,12 +1457,15 @@ Installer le paquet [b]clamav-milter[/b] depuis les dépôts officiels de Debian
 Une fois que tous les paquets sont installés, il faut mettre à jour la base de signature avec [b]freshclam[/b] :
 
 [code]
+service clamav-freshclam stop
 freshclam
 
 # ClamAV update process started at Sat Sep 13 23:42:44 2014
 # main.cvd is up to date (version: 55, sigs: 2424225, f-level: 60, builder: neo)
 # daily.cvd is up to date (version: 19360, sigs: 1098967, f-level: 63, builder: dgoddard)
 # bytecode.cvd is up to date (version: 242, sigs: 46, f-level: 63, builder: dgoddard)
+
+service clamav-freshclam start
 [/code]
 
 Ensuite on démarre le daemon : 
@@ -1547,7 +1550,7 @@ On redémarre le daemon pour prendre en compte les modifications :
 
 Il ne reste plus qu'à dire à Postfix où se trouve le socket UNIX de clamav dans le fichier /etc/postfix/main.cf :
 
-[code]smtpd_milters = ... unix:/clamav/clamav-milter.ctl[/code]
+[code]smtpd_milters = unix:/opendkim/opendkim.sock, unix:/opendmarc/opendmarc.sock, unix:/clamav/clamav-milter.ctl[/code]
 
 Recharger la configuration de Postfix :
 
