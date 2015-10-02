@@ -977,11 +977,41 @@ Copiez le contenu du fichier mail.txt (la clé publique) :
 
 [code]cat mail.txt[/code]
 
-Et mettez le dans votre fichier de zone de votre domaine, soit depuis l'interface de votre registrar, soit avec BIND :
+Le format de l'enregistrement DKIM est comme ceci :
 
 [code]
-mail._domainkey IN TXT "k=rsa; p=CLE PUBLIQUE" ;
+mail._domainkey IN TXT "v=DKIM1; k=rsa; p=VOTRE CLE PUBLIQUE"
 [/code]
+
+On va prendre exemple avec une clé de 4096 bits :
+
+[code]
+# cat mail.txt
+
+mail._domainkey	IN	TXT	( "v=DKIM1; k=rsa; "
+	  "p=MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA5tSGc+j5pLEuWeR4NIhDRPhwHUZll1/N3ajHF1wSttUVp/igdcpZTKTD7ccFmsY0l+72Q+rlnoCGGdhdw0ImRoPVZwBfSxvC3alw/YLLCEwpy+J/tXx2WOPdHM95TVbt0S/wVWpPxmr3mAIPO24R4NEf0yQdvktnB26UTcLBEMtqAEtEDLqrea/XM5HQMngWXAARy379H6mo1Y"
+	  "ee3wUqYZPX+g8ljZZMpIlvaE0pjtVIZ0kV8/kXz0fa1XHanc6rTsF7/XxCLYJRAK6fcfO8u/Ro65uWNM3x8+WN1nkf/ojh8VN/0A5oUrlQVWba4OEXxCkbZTU7V+4okyyhAHV2+/c0qRsKRNj2YuPl3DmJ8/me/UBHbIEeji7kcBuVkgv0cakHolMbKWESBuuw1F5MPThQ3qbUcCI9mY4OtTnElk40DVXMenKwQ1EnqJZlHtj6XOo0/na4"
+	  "epqH+rtUOXhan6ewd8XQvJk630Qi1FHzWmO7i4pb8Uo0EDrAQmPvCNsR+AttrIdK7Ry3xgKAUdSyfT2GXmtP3hpr4l2w0Qv0sXAkVzz9xF0OsUjb3pztdAKz9t9pHiIj3C5p0HQZTAr7oVAzjiDu6gntfoMzTB6mY6PKF2TYOBagu0AZAwgwuWb24zrGPXRPS8U01TlY6UVzFJbB+97i0Nim5jQmyf/r38cCAwEAAQ==" )  ; ----- DKIM key mail for domaine.tld
+[/code]
+
+Si vous avez votre propre serveur DNS avec Bind9 par exemple, ce format là est valide, ça passe, pas besoin de modifier.
+Si vous êtes chez un registrar comme Gandi, OVH ou autre, vous pouvez essayer :
+
+[b]1 -[/b] Soit de rassembler tous les morceaux de la clé en une seule chaîne de caractères, donc la clé au dessus deviendrait :
+
+[code]
+mail._domainkey IN TXT ( "v=DKIM1; k=rsa; p=MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA5tSGc+j5pLEuWeR4NIhDRPhwHUZll1/N3ajHF1wSttUVp/igdcpZTKTD7ccFmsY0l+72Q+rlnoCGGdhdw0ImRoPVZwBfSxvC3alw/YLLCEwpy+J/tXx2WOPdHM95TVbt0S/wVWpPxmr3mAIPO24R4NEf0yQdvktnB26UTcLBEMtqAEtEDLqrea/XM5HQMngWXAARy379H6mo1Yee3wUqYZPX+g8ljZZMpIlvaE0pjtVIZ0kV8/kXz0fa1XHanc6rTsF7/XxCLYJRAK6fcfO8u/Ro65uWNM3x8+WN1nkf/ojh8VN/0A5oUrlQVWba4OEXxCkbZTU7V+4okyyhAHV2+/c0qRsKRNj2YuPl3DmJ8/me/UBHbIEeji7kcBuVkgv0cakHolMbKWESBuuw1F5MPThQ3qbUcCI9mY4OtTnElk40DVXMenKwQ1EnqJZlHtj6XOo0/na4epqH+rtUOXhan6ewd8XQvJk630Qi1FHzWmO7i4pb8Uo0EDrAQmPvCNsR+AttrIdK7Ry3xgKAUdSyfT2GXmtP3hpr4l2w0Qv0sXAkVzz9xF0OsUjb3pztdAKz9t9pHiIj3C5p0HQZTAr7oVAzjiDu6gntfoMzTB6mY6PKF2TYOBagu0AZAwgwuWb24zrGPXRPS8U01TlY6UVzFJbB+97i0Nim5jQmyf/r38cCAwEAAQ==" )  ; ----- DKIM key mail for domaine.tld
+[/code]
+
+[b]2 -[/b] Soit de supprimer les espaces entre les [b]""[/b] mais tout en gardant les [b]""[/b] (pas comme dans le premier exemple) :
+
+[code]
+mail._domainkey IN TXT ( "v=DKIM1; k=rsa; "p=MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA5tSGc+j5pLEuWeR4NIhDRPhwHUZll1/N3ajHF1wSttUVp/igdcpZTKTD7ccFmsY0l+72Q+rlnoCGGdhdw0ImRoPVZwBfSxvC3alw/YLLCEwpy+J/tXx2WOPdHM95TVbt0S/wVWpPxmr3mAIPO24R4NEf0yQdvktnB26UTcLBEMtqAEtEDLqrea/XM5HQMngWXAARy379H6mo1Y""ee3wUqYZPX+g8ljZZMpIlvaE0pjtVIZ0kV8/kXz0fa1XHanc6rTsF7/XxCLYJRAK6fcfO8u/Ro65uWNM3x8+WN1nkf/ojh8VN/0A5oUrlQVWba4OEXxCkbZTU7V+4okyyhAHV2+/c0qRsKRNj2YuPl3DmJ8/me/UBHbIEeji7kcBuVkgv0cakHolMbKWESBuuw1F5MPThQ3qbUcCI9mY4OtTnElk40DVXMenKwQ1EnqJZlHtj6XOo0/na4""epqH+rtUOXhan6ewd8XQvJk630Qi1FHzWmO7i4pb8Uo0EDrAQmPvCNsR+AttrIdK7Ry3xgKAUdSyfT2GXmtP3hpr4l2w0Qv0sXAkVzz9xF0OsUjb3pztdAKz9t9pHiIj3C5p0HQZTAr7oVAzjiDu6gntfoMzTB6mY6PKF2TYOBagu0AZAwgwuWb24zrGPXRPS8U01TlY6UVzFJbB+97i0Nim5jQmyf/r38cCAwEAAQ==" )  ; ----- DKIM key mail for domaine.tld
+[/code]
+
+Je sais que cette solution [url=http://mondedie.fr/viewtopic.php?pid=23121#p23121]fonctionne chez Gandi[/url] en tout cas.
+
+[b]3 -[/b] Soit de réduire la taille de la clé à [b]1024 bits[/b], certains registrars n'acceptent tout simplement pas des clés supérieures à cette taille.
 
 Et pour finir, on redémarre tous les services :
 
@@ -1044,6 +1074,8 @@ Voici un ptit schéma :
 [center][img]http://i.imgur.com/R2JGo4o.jpg[/img][/center]
 
 Les règles de DMARC sont stockés dans un enregistrement de type TXT dans le fichier de zone de votre nom de domaine, exemple :
+
+[quote][b][color=#ff0000]NE PAS METTRE L'ENREGISTREMENT DMARC SI VOUS N'ÊTES PAS CERTAIN DU FONCTIONNEMENT DE SPF ET DKIM. SINON LES FOURNISSEURS DE MAILS QUI RESPECTENT LES IDENTIFICATEURS D'ALIGNEMENT DMARC (GMAIL, MICROSOFT ENTRE AUTRE) VONT BLOQUER VOTRE DOMAINE PAR PRÉCAUTION. SI VOUS NE COMPRENEZ PAS À QUOI ÇA SERT, NE LE METTEZ PAS ![/color][/b][/quote]
 
 [code]_dmarc  IN  TXT "
     v=DMARC1; 
