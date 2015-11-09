@@ -834,9 +834,9 @@ Exécutez les commandes suivantes :
 
 [code]
 cd /tmp
-wget https://github.com/ossec/ossec-hids/archive/2.8.2.tar.gz
-tar xzf 2.8.2.tar.gz
-cd ossec-hids-2.8.2/
+wget https://bintray.com/artifact/download/ossec/ossec-hids/ossec-hids-2.8.3.tar.gz
+tar xzf ossec-hids-2.8.3.tar.gz
+cd ossec-hids-2.8.3/
 
 # Ajout du support de Prelude si vous l'avez installé, ce n'est pas obligatoire
 cd src && make setprelude && cd ..
