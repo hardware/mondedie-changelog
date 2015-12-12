@@ -1588,6 +1588,62 @@ Recharger la configuration de Postfix :
 
 [code]service postfix reload[/code]
 
+[h]Bonus - Mettre en place un certificat signé et valide avec Let's Encrypt[/h]
+
+Téléchargement du client ACME de Let's encrypt :
+[code]
+cd /tmp && git clone https://github.com/letsencrypt/letsencrypt && cd letsencrypt
+[/code]
+
+Génération des certificats:
+[code]./letsencrypt-auto certonly --rsa-key-size 4096 -d hostname.domain.tld --email contact@domain.tld --agree-tos[/code]
+
+Mise en place des certificats dans Postfix :
+[code]
+# vim /etc/postfix/main.cf
+
+smtp_tls_CAfile     = /etc/letsencrypt/live/hostname.domain.tld/chain.pem
+smtpd_tls_cert_file = /etc/letsencrypt/live/hostname.domain.tld/cert.pem
+smtpd_tls_key_file  = /etc/letsencrypt/live/hostname.domain.tld/privkey.pem
+[/code]
+
+Mise en place des certificats dans Dovecot :
+[code]
+# vim /etc/dovecot/conf.d/10-ssl.conf
+
+ssl_cert = </etc/letsencrypt/live/hostname.domain.tld/fullchain.pem
+ssl_key  = </etc/letsencrypt/live/hostname.domain.tld/privkey.pem
+[/code]
+
+Et pour finir, on redémarre les services :
+
+[code]service postfix restart & service dovecot restart[/code]
+
+Tester quand même le bon fonctionnement avec la commande openssl :
+
+[code]
+openssl s_client -connect hostname.domain.tld:587 -starttls smtp -tlsextdebug # Postfix
+openssl s_client -connect hostname.domain.tld:993 -tlsextdebug # Dovecot
+[/code]
+
+Il faut vérifier la chaîne :
+
+[code]
+Certificate chain
+ 0 s:/CN=hostname.domain.tld
+   i:/C=US/O=Let's Encrypt/CN=Let's Encrypt Authority X1
+ 1 s:/C=US/O=Let's Encrypt/CN=Let's Encrypt Authority X1
+   i:/O=Digital Signature Trust Co./CN=DST Root CA X3
+[/code]
+
+Dans le cas de IMAP, le serveur devrait répondre :
+
+[code]* OK [CAPABILITY IMAP4rev1 LITERAL+ SASL-IR LOGIN-REFERRALS ID ENABLE IDLE AUTH=PLAIN AUTH=LOGIN] Dovecot ready.[/code]
+
+Dans le cas de SMTP via STARTTLS, le serveur devrait répondre :
+
+[code]250 DSN[/code]
+
 [h]Bonus - Mise en place de POP3[/h]
 
 En bonus, pour ceux qui souhaitent avoir accès à leurs e-mails via le protocole pop3. Dovecot prend en charge ce protocole mais n'est pas du tout optimisé pour, plus d'info : [url]http://wiki2.dovecot.org/POP3Server[/url] 
