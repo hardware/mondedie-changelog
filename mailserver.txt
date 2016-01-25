@@ -740,6 +740,23 @@ ssl_dh_parameters_length = 2048 # Dovecot > 2.2.x
 
 [quote]Fichier de configuration complet : [url]https://gist.github.com/hardware/91ed5e01929b8b414ae0[/url][/quote]
 
+Si un jour vous oubliez le mot de passe du compte administrateur, cette procédure permet de le changer :
+
+[code]
+# On génère le hash correspondant au mot de passe
+doveadm pw -s MD5-CRYPT -p MOT_DE_PASSE | sed 's/{MD5-CRYPT}//'
+
+mysql -u root -p
+
+mysql> connect postfix
+mysql> UPDATE admin SET password = 'HASH' WHERE username = 'admin@domain.tld';
+
+Query OK, 1 row affected (0.00 sec)
+Rows matched: 1  Changed: 1  Warnings: 0
+
+mysql> quit
+[/code]
+
 [h]7 - Redémarrage des services et vérification des ports[/h]
 
 On redémarre Postfix et Dovecot :
