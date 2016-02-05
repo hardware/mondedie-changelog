@@ -46,7 +46,13 @@ Un changelog est disponible sur Github pour que vous puissiez suivre les évolut
 
 [h]Script d'auto-installation :[/h]
 
-[color=#50e619][b]Un script d'installation automatique est disponible dans ce topic : [url]http://mondedie.fr/viewtopic.php?pid=11746[/url][/b][/color]
+[s][color=#50e619][b]Un script d'installation automatique est disponible dans ce topic : [url]http://mondedie.fr/viewtopic.php?pid=11746[/url][/b][/color][/s]
+
+[color=#ff0000][b]Ce script n'est plus maintenu, voir en dessous pour une solution automatisée via Docker.[/b][/color]
+
+[h]Image docker :[/h]
+
+https://github.com/hardware/mailserver
 
 [h]Schéma :[/h]
 
