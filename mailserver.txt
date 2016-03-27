@@ -52,7 +52,7 @@ Un changelog est disponible sur Github pour que vous puissiez suivre les évolut
 
 [h]Image docker :[/h]
 
-https://github.com/hardware/mailserver
+[url]https://github.com/hardware/mailserver[/url]
 
 [h]Schéma :[/h]
 
@@ -1150,7 +1150,7 @@ Syslog                  true
 AuthservID              "hostname.domain.tld"
 TrustedAuthservIDs      "hostname.domain.tld"
 IgnoreHosts             /etc/opendkim/TrustedHosts
-
+IgnoreMailFrom          "domain.tld"
 RejectFailures          false
 
 UserID                  opendmarc:opendmarc
