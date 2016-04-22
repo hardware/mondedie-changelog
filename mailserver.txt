@@ -318,9 +318,11 @@ smtpd_client_restrictions =
 # Règles sur les expéditeurs
 # reject_non_fqdn_sender : Refuser les expéditeurs invalides (non FQDN)
 # reject_unknown_sender_domain : Refuser les expéditeurs qui n'ont pas de champ DNS A ou MX dans leurs DNS. 
+# reject_sender_login_mismatch : Refuser les expéditeurs locaux non authentifiés
 smtpd_sender_restrictions =
      reject_non_fqdn_sender,      
-     reject_unknown_sender_domain
+     reject_unknown_sender_domain,
+     reject_sender_login_mismatch
 [/code]
 
 Ensuite nous allons définir les paramètres de chiffrement via TLS :
@@ -445,12 +447,14 @@ virtual_minimum_uid     = 5000
 virtual_mailbox_base    = /var/mail
 [/code]
 
-Les 3 règles suivantes permettent à Postfix de savoir comment se connecter et lire la base de donnée afin de récupérer des informations sur les différents domaines, adresses virtuelles et alias. Nous allons détailler le contenu de ces 3 fichiers juste après. 
+Les 4 règles suivantes permettent à Postfix de savoir comment se connecter et lire la base de donnée afin de récupérer des informations sur les différents domaines, adresses virtuelles et alias. Nous allons détailler le contenu de ces 4 fichiers juste après. 
 
 [code]
 virtual_mailbox_domains = mysql:/etc/postfix/mysql-virtual-mailbox-domains.cf
 virtual_mailbox_maps    = mysql:/etc/postfix/mysql-virtual-mailbox-maps.cf
 virtual_alias_maps      = mysql:/etc/postfix/mysql-virtual-alias-maps.cf
+
+smtpd_sender_login_maps  = mysql:/etc/postfix/mysql/mysql-sender-login-maps.cf
 [/code]
 
 Le paramètre [b]virtual_transport[/b] est très très important, il permet à Postfix de savoir où envoyer les emails reçus. Dans notre cas, on utilise le protocole [b]LMTP[/b] pour les acheminer jusqu'à Dovecot :
@@ -492,7 +496,7 @@ C'est terminé pour le fichier de configuration principale, je vous l'accorde il
 
 [h]Configuration de Postfix pour MySQL[/h]
 
-On peut maintenant créer les 3 trois fichiers de configuration qui vont permettrent à Postfix d'intéragir avec MySQL :
+On peut maintenant créer les 4 fichiers de configuration qui vont permettre à Postfix d’interagir avec MySQL :
 
 [code]
 # vim /etc/postfix/mysql-virtual-mailbox-domains.cf
@@ -525,6 +529,17 @@ password = MOT DE PASSE
 dbname = postfix
 
 query = SELECT goto FROM alias WHERE address='%s' AND active = 1
+[/code]
+
+[code]
+# /etc/postfix/mysql-sender-login-maps.cf
+
+hosts    = {{ DBHOST }}
+user     = {{ DBUSER }}
+password = {{ DBPASS }}
+dbname   = {{ DBNAME }}
+
+query = SELECT username FROM mailbox WHERE username='%s' AND active = 1
 [/code]
 
 Si vous voulez activer le port 587 pour vous connecter de manière sécurisé par SMTPS avec n'importe quel client mail, il faut décommenter/modifier les lignes suivantes dans le fichier [b]/etc/postfix/master.cf [/b]:
@@ -1323,7 +1338,7 @@ Ajouter aussi à la fin du fichier local.cf :
 
 [code]
 report_safe 0
-whitelist_from *@domain.tld
+whitelist_auth *@domain.tld
 
 add_header all Report _REPORT_
 add_header spam Flag _YESNOCAPS_
