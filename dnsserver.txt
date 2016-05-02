@@ -60,6 +60,10 @@ options {
 
     # Ne pas autoriser la mise à jour des zones maîtres
     allow-update { none; };
+
+    version none;
+    hostname none;
+    server-id none;
 };
 [/code]
 
@@ -110,8 +114,8 @@ $TTL 7200
 
 @       IN      SOA    ns1.domain.tld. hostmaster.domain.tld. (
                                         2014102001 ; Serial
-                                        7200       ; Refresh
-                                        1800       ; Retry
+                                        14400      ; Refresh
+                                        3600       ; Retry
                                         1209600    ; Expire - 1 week
                                         86400 )    ; Minimum
 
@@ -531,6 +535,16 @@ Puis la donner à votre registrar :
 [img]http://i.imgur.com/KLTNbyG.png[/img]
 
 Une fois validé, votre registrar se chargera de générer le condensât, et de le transmettre au registre. Il faut attendre quelques heures pour que les champs DS soient disponibles au niveau de la zone parent.
+
+[b]Exemple chez GoDaddy [/b] : (Merci à Solinvictus pour le screenshot)
+
+[code]head -n 1 /etc/bind/domain.tld/dsset-domain.tld. 
+domain.tld.		IN DS 59704 8 1 EB6646E2A2F95A29895CDC3AE69BB8B62AD3B4D6
+[/code]
+
+On renseigne en conséquence les champs chez correspondants :
+
+[img=dnssec godaddy]https://images.mondedie.fr/w1NLWBSx/Uu1CC89d.png[/img]
 
 [h]Maintenir sa zone[/h]
 
